@@ -1,0 +1,5 @@
+Django==5.2.18
+psycopg[binary]==3.3.6
+waitress==3.0.2
+cryptography>=46
+gunicorn>=23; sys_platform != "win32"

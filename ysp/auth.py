@@ -275,6 +275,7 @@ def clear_session(conn: sqlite3.Connection) -> None:
 
 
 def _meta(conn: sqlite3.Connection, k: str) -> Any:
+    if getattr(conn,'tenant_store',False):return conn.get_meta(k)
     row = conn.execute("SELECT v FROM meta WHERE k=?", (k,)).fetchone()
     if not row:
         return None
@@ -285,6 +286,9 @@ def _meta(conn: sqlite3.Connection, k: str) -> Any:
 
 
 def _set_meta(conn: sqlite3.Connection, k: str, v: Any) -> None:
+    if getattr(conn,'tenant_store',False):
+        conn.set_meta(k,v)
+        return
     conn.execute(
         "INSERT INTO meta (k,v) VALUES (?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v",
         (k, json.dumps(v, ensure_ascii=False)),

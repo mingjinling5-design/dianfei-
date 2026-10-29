@@ -1,0 +1,7 @@
+[Unit]
+Description=Renew electricity portal IP certificate
+Requires=docker.service
+After=docker.service
+[Service]
+Type=oneshot
+ExecStart=/bin/sh /opt/yispower/deploy/renew.sh

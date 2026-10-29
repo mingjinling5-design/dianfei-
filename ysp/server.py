@@ -26,9 +26,10 @@ from .auth import (
 )
 from .collect import collect_once
 from .config import ROOT, db_path, load_config
+from .tenant_context import CURRENT
 
 WEB_DIR = ROOT / "web"
-CFG = load_config()
+CFG = CURRENT.get()[1] if CURRENT.get() else load_config()
 analyze.set_vacancy_config(CFG)
 DB_FILE = db_path(CFG)
 
@@ -557,6 +558,11 @@ def api_ack(body):
 def api_auth_status(q):
     """前端据此决定是显示登录向导还是仪表盘。"""
     src = CFG["source"]
+    if src.get('type') == 'eschool':
+        from .eschool_service import handle
+        info = handle('status',{},CFG)
+        return {'source_type':'eschool','login_required':True,'logged_in':info['logged_in'],
+                'need_relogin':info['need_login'],'need_location':not info.get('room_bound')}
     kind = str(src.get("type", "demo")).lower()
     s = load_session(conn())
     phone = resolve_phone(CFG, conn())
@@ -970,7 +976,19 @@ def api_export(q):
     return {"__csv__": buf.getvalue(), "filename": f"{room['room_key']}_readings.csv"}
 
 
+def api_eschool(action, body):
+    from .eschool_service import handle
+    from .adapters import SourceError
+    try:
+        return handle(action,body,CFG)
+    except SourceError as exc:
+        return {'ok':False,'error':str(exc)}
+    except (ValueError,KeyError,TypeError):
+        return {'ok':False,'error':'易校园响应格式异常，请刷新验证码后重试。'}
+
+
 ROUTES_GET = {
+    '/api/eschool/status': lambda q: api_eschool('status',{}),
     "/api/health": api_health,
     "/api/rooms": api_rooms,
     "/api/summary": api_summary,
@@ -1002,6 +1020,8 @@ ROUTES_GET = {
 }
 
 ROUTES_POST = {
+    **{'/api/eschool/'+action: (lambda body, a=action: api_eschool(a,body))
+       for action in ('captcha','send-code','login','locations','room','authorize','auto-room')},
     "/api/collect": api_collect,
     "/api/alerts/ack": api_ack,
     "/api/alerts/test": api_test_email,
@@ -1048,6 +1068,8 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def _static(self, path: str):
+        if path == '/login' and CFG['source'].get('type') == 'eschool':
+            path = '/eschool'
         rel = path.lstrip("/") or "index.html"
         target = (WEB_DIR / rel).resolve()
         try:
@@ -1095,11 +1117,20 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         u = urlparse(self.path)
+        if u.path.startswith('/api/eschool/'):
+            allowed = {'http://127.0.0.1:' + str(CFG['app']['port']), 'http://localhost:' + str(CFG['app']['port'])}
+            if self.headers.get('Host') not in {urlparse(v).netloc for v in allowed} or self.headers.get('Origin') not in allowed | {None} or self.headers.get('X-Eschool-Request') != '1':
+                self._json({'error':'请从本机易校园登录页面操作'},403)
+                return
         fn = ROUTES_POST.get(u.path)
         if not fn:
             self._json({"error": "not found"}, 404)
             return
         length = int(self.headers.get("Content-Length") or 0)
+        if length < 0 or length > 24 * 1024 * 1024:
+            self._json({'error': '请求过大，请只导出余额查询抓包'}, 413)
+            self.close_connection = True
+            return
         raw = self.rfile.read(length) if length else b"{}"
         try:
             body = json.loads(raw.decode("utf-8") or "{}")

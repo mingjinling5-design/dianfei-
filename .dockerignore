@@ -1,0 +1,11 @@
+.git
+data
+.env
+.venv
+__pycache__
+*.pyc
+config.json
+config.yaml
+integrations/php/local
+deploy/letsencrypt
+deploy/backups

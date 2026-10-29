@@ -7,6 +7,19 @@ logs/
 # 含凭据的配置，绝对不要提交
 config.yaml
 config.local.yaml
+config.json
+.env
+*.har
+*.key
+*.pem
+!integrations/php/certs/cacert.pem
+*.sqlite3
+服务器部署交付.md
+deploy/letsencrypt/
+deploy/backups/
+deploy/acme/
+release/
+integrations/php/local/
 
 # Python
 __pycache__/

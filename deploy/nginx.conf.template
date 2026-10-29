@@ -1,0 +1,23 @@
+server {
+    listen 80;
+    server_name ${YSP_HOST};
+    location /.well-known/acme-challenge/ { root /var/www/acme; }
+    location / { return 308 https://${YSP_HOST}$request_uri; }
+}
+server {
+    listen 443 ssl;
+    server_name ${YSP_HOST};
+    ssl_certificate /etc/letsencrypt/live/${YSP_HOST}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${YSP_HOST}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    client_max_body_size 64k;
+    location /.well-known/acme-challenge/ { root /var/www/acme; }
+    location / {
+        proxy_pass http://web:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 120s;
+    }
+}

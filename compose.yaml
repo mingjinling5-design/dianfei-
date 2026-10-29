@@ -1,0 +1,61 @@
+x-app: &app
+  build: .
+  env_file: .env
+  environment:
+    YSP_PRODUCTION: '1'
+    DATABASE_URL: postgresql://ysp:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/ysp
+  restart: unless-stopped
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ysp
+      POSTGRES_DB: ysp
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U ysp -d ysp']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  migrate:
+    <<: *app
+    restart: 'no'
+    command: [python, manage.py, migrate, --noinput]
+    depends_on:
+      db: {condition: service_healthy}
+  web:
+    <<: *app
+    stop_grace_period: 120s
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; r=urllib.request.Request('http://127.0.0.1:8000/api/health',headers={'Host':'${YSP_HOST:?set YSP_HOST}','X-Forwarded-Proto':'https'}); urllib.request.urlopen(r,timeout=5)"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+  worker:
+    <<: *app
+    command: [python, manage.py, collect_accounts]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+  nginx:
+    image: nginx:stable-alpine
+    environment: {YSP_HOST: '${YSP_HOST:?set YSP_HOST}'}
+    ports: ['80:80', '443:443']
+    volumes:
+      - ./deploy/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./deploy/acme:/var/www/acme:ro
+      - ./deploy/letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      web: {condition: service_healthy}
+    restart: unless-stopped
+  certbot:
+    image: certbot/certbot:latest
+    profiles: [maintenance]
+    volumes:
+      - ./deploy/acme:/var/www/acme
+      - ./deploy/letsencrypt:/etc/letsencrypt
+volumes:
+  postgres_data:

@@ -1,0 +1,7 @@
+[Unit]
+Description=Back up electricity portal PostgreSQL
+Requires=docker.service
+After=docker.service
+[Service]
+Type=oneshot
+ExecStart=/bin/sh /opt/yispower/deploy/backup.sh

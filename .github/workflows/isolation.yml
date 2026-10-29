@@ -1,0 +1,23 @@
+name: Multi-user isolation
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env: {POSTGRES_USER: ysp, POSTGRES_PASSWORD: ci-only, POSTGRES_DB: ysp}
+        ports: ['5432:5432']
+        options: --health-cmd='pg_isready -U ysp' --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      DATABASE_URL: postgresql://ysp:ci-only@localhost:5432/ysp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - run: pip install -r requirements-server.txt
+      - run: python manage.py migrate --noinput
+      - run: python manage.py test portal.accounts --verbosity 2
+      - run: python -m unittest test_eschool test_room_restore -q
+      - run: python deploy/generate_env.py --email ci@example.org
+      - run: docker compose config --quiet

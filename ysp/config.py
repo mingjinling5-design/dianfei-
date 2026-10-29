@@ -249,6 +249,7 @@ def load_config(path: str | os.PathLike | None = None) -> dict:
 
 
 def db_path(cfg: dict) -> Path:
+    if cfg.get('_tenant_id'): return 'orm:'+str(cfg['_tenant_id'])
     p = Path(cfg["db"]["path"])
     if not p.is_absolute():
         p = ROOT / p

@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
-<head>
+<head><script src="/site.js"></script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="theme-color" content="#ffffff" />
@@ -254,7 +254,8 @@
 
 <header>
   <div class="bar">
-    <h1>⚡ 寝室电费</h1>
+    <h1>寝室电费</h1>
+    <a href="/eschool" style="font-size:13px;white-space:nowrap">易校园登录</a>
     <span class="room" id="roomName"></span>
     <span class="upd" id="updatedAt"></span>
     <span class="grow"></span>
@@ -761,7 +762,7 @@ function renderHero(s){
     <div><div class="k">日均</div><div class="v">${cvd(cv(s.avg7))} ${unit()}</div></div>`;
 
   const notes = [];
-  if (tip) notes.push(`<div class="note ${lvl==='crit'?'crit':'info'}"><div>💡</div><div>${tip}</div></div>`);
+  if (tip) notes.push(`<div class="note ${lvl==='crit'?'crit':'info'}"><div>提示</div><div>${tip}</div></div>`);
   renderNotes(notes, s);
 }
 
@@ -769,7 +770,7 @@ function renderNotes(baseNotes, s){
   const notes = baseNotes.slice();
   const st = state.quality || {};
   if (st.session && st.session.need_relogin){
-    notes.push(`<div class="note crit"><div>🔑</div><div>登录已过期，需要重新验证一次。<a href="/login">去登录</a></div></div>`);
+    notes.push(`<div class="note crit"><div>授权</div><div>登录已过期，需要重新验证一次。<a href="/login">去登录</a></div></div>`);
   } else if (st.stale_segments && st.stale_segments.length){
     const g = st.stale_segments[st.stale_segments.length-1];
     const hrs = Math.round(g.hours);
@@ -777,7 +778,7 @@ function renderNotes(baseNotes, s){
     // 只在「进行中」或「刚结束 2 天内」置顶提醒，更早的收到折叠区里说。
     const endedDays = g.end ? (Date.now() - new Date(g.end).getTime()) / 86400000 : 999;
     if (g.ongoing || endedDays <= 2){
-      notes.push(`<div class="note warn"><div>⏸</div><div>
+      notes.push(`<div class="note warn"><div>更新</div><div>
         易校园数据有 <b>${hrs >= 48 ? Math.round(hrs/24) + " 天" : hrs + " 小时"}</b>未更新
         （${g.start.slice(0,10)} 起${g.ongoing ? "，到现在" : ""}）。
         该时段用电量无法统计，实际费用可能高于图示。</div></div>`);
@@ -787,13 +788,13 @@ function renderNotes(baseNotes, s){
   const vs = (s && s.excluded && s.excluded.vacant_spans) || [];
   if (vs.length){
     const v = vs[vs.length-1];
-    notes.push(`<div class="note info"><div>🏠</div><div>
+    notes.push(`<div class="note info"><div>用电</div><div>
       ${fmtDay(v.start)} ~ ${fmtDay(v.end)} 共 <b>${v.days} 天</b>用电量极低
       （每天 ${v.avg} ${unit()}，平时约 ${v.normal} ${unit()}）。
       已排除，不计入日均。</div></div>`);
   }
   if (st.fail_streak >= 3){
-    notes.push(`<div class="note warn"><div>📡</div><div>最近连续 ${st.fail_streak} 次没能读到数据，正在自动重试。</div></div>`);
+    notes.push(`<div class="note warn"><div>连接</div><div>最近连续 ${st.fail_streak} 次没能读到数据，正在自动重试。</div></div>`);
   }
   // 数据陈旧：比采集周期还久没更新，明确说出来（否则用户只会觉得"页面没刷新"）
   const fresh = st.freshness_minutes;
@@ -801,7 +802,7 @@ function renderNotes(baseNotes, s){
   if (fresh != null && fresh > iv * 2 && !(st.session && st.session.need_relogin)){
     const txt = fresh >= 1440 ? `${Math.floor(fresh/1440)} 天`
              : fresh >= 60 ? `${Math.floor(fresh/60)} 小时` : `${Math.round(fresh)} 分钟`;
-    notes.push(`<div class="note warn"><div>🕒</div><div>
+    notes.push(`<div class="note warn"><div>数据</div><div>
       数据已经 <b>${txt}</b> 没有更新了（正常每 ${iv} 分钟一次）。
       最后采集：${(st.last_collect || "—").replace("T", " ")}。</div></div>`);
   }

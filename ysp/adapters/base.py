@@ -301,6 +301,9 @@ def build_adapter(cfg: dict, session: dict | None = None) -> BaseAdapter:
     s = session or {}
     # 会话里显式指定了数据源就用它（例如粘贴 Cookie 导入的 xiaofubao 会话）
     kind = str(s.get("source_type") or cfg["source"].get("type", "demo")).lower()
+    if cfg['source'].get('type') == 'eschool':
+        from .eschool import EschoolAdapter
+        return EschoolAdapter(cfg)
     if kind == "nofish":
         return NoFishAdapter(cfg, phone=s.get("phone"))
     if kind == "xiaofubao":

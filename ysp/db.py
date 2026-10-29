@@ -137,6 +137,12 @@ def migrate(conn: sqlite3.Connection) -> list[str]:
 
 
 def connect(path: str | Path) -> sqlite3.Connection:
+    if str(path).startswith('orm:'):
+        from .tenant_context import CURRENT
+        tenant=CURRENT.get()
+        if not tenant or str(tenant[0].id)!=str(path)[4:]:raise PermissionError('Missing account context')
+        from portal.accounts.store import TenantStore
+        return TenantStore(tenant[0])
     conn = sqlite3.connect(str(path), timeout=30, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
@@ -411,3 +417,19 @@ def backup_db(src: str | Path, dest_dir: str | Path, keep: int = 30,
     return {"ok": True, "skipped": False, "path": str(dest),
             "size": dest.stat().st_size, "removed": removed,
             "kept": min(len(files), keep) if keep > 0 else len(files)}
+
+
+# Explicit connection dispatch keeps legacy CLI tools and account-scoped web data separate.
+def _owner_dispatch(original):
+    import functools
+    @functools.wraps(original)
+    def wrapped(connection,*args,**kwargs):
+        if getattr(connection,'tenant_store',False):
+            return getattr(connection,original.__name__)(*args,**kwargs)
+        return original(connection,*args,**kwargs)
+    return wrapped
+
+for _operation in ('upsert_room','list_rooms','get_room','insert_reading','fetch_readings','last_reading',
+                   'count_readings','coverage','add_event','fetch_events','add_alert','recent_alert',
+                   'list_alerts','ack_alert','set_meta','get_meta','bulk_insert'):
+    globals()[_operation]=_owner_dispatch(globals()[_operation])
