@@ -1,0 +1,140 @@
+# 复制为 config.yaml 后按注释修改
+# 本文件是纯文本 YAML；项目自带极简解析器，没有 PyYAML 也能读。
+
+app:
+  host: 127.0.0.1        # 想让室友/公网访问就改 0.0.0.0（记得配防火墙）
+  port: 8787
+  title: 易校园 · 寝室电费监测
+
+  # 寝室常住人数：用于「每人每月分摊多少」的预估
+  # 前端可以在 4 人 / 5 人之间临时切换，切换结果记在浏览器里
+  people: 4
+  people_options: [4, 5]
+  # 每日自动备份：上游只保留 7 天历史，本地库是唯一的长历史来源。
+  # serve 启动时 + 每轮采集后检查，每天生成一份快照，保留最近 30 份。
+  # 逐小时气温（Open-Meteo，免费无需 key）。
+  # 现在只存不参与计算 —— 可用样本太少，拟合气温系数会过拟合。
+  # 用途：过去的气温拿去训练，未来的气温拿去预测（降温了用电会降）。
+  # 日类型：上课日/周末/短假/长假/考试周/寒暑假。
+  # 节假日从 timor.tech 拉一次后缓存到本地，运行时不联网。
+  # ⚠️ 现在只打标签，不参与计算 —— 每种日类型的样本还不够。
+  #    「长假」只表示学生可能离校，不代表宿舍一定没人（有人留下打游戏很正常）。
+  daytype:
+    enabled: true
+    cache_dir: data/holidays
+    term: 2026-2027-1
+    lookahead_days: 120
+    lookback_days: 30
+  weather:
+    enabled: true
+    latitude: 30.27          # 杭州
+    longitude: 120.16
+    timezone: Asia/Shanghai
+    past_days: 14            # 每次回看多少天（上限 92）
+    forecast_days: 16        # 往后取多少天（上限 16）
+  backup:
+    enabled: true
+    keep: 30
+    dir: data/backup
+
+db:
+  path: data/power.db
+
+source:
+  # ┌──────────────────────────────────────────────────────────────┐
+  # │ nofish = 本项目自带的手机验证码登录（推荐，不用抓包）           │
+  # │          打开 http://127.0.0.1:8787/login 输手机号+验证码即可  │
+  # │ demo   = 生成演示数据，零凭据，先看效果用                       │
+  # │ xiaofubao = 直连易校园上游，需要 shiroJID + ymId               │
+  # └──────────────────────────────────────────────────────────────┘
+  type: nofish
+
+  base_url: https://tool.no-fish.cn
+
+  # ↓↓↓ 下面这些登录后会自动写入，一般不用手填 ↓↓↓
+  phone: ""              # 登录后自动保存，重启服务器不用重新登录
+  school_code: ""        # 单一学校：登录时选一次，之后固定
+  school_name: ""
+
+  # 仅 xiaofubao 模式需要
+  shiro_jid: ""
+  ym_id: ""
+  endpoint: https://application.xiaofubao.com/app/electric/queryISIMSRoomSurplus
+
+  timeout: 20
+  # 上游证书过期或校园网做 TLS 中间人时自动降级为不校验（会打印一次告警）
+  # 想强制校验并让请求直接失败，设 true
+  strict_tls: false
+
+# 房间：nofish 模式下不用手写，登录并绑定宿舍后会自动生成一条
+rooms:
+  - room_key: DEMO-3-502
+    label: 3号楼 502
+    unit_price: 0.538         # 电价（元/度）—— 上游按元计费，度按这个折算
+    warn_kwh: 20              # 余额低于此值告警（元制下单位就是元）
+    critical_kwh: 5           # 低于此值严重告警
+
+collect:
+  # 易校园每小时更新一次电费，所以默认按小时采集
+  interval_minutes: 60
+  # 整点后延迟几分钟再采，确保上游已经更新完（推荐 5）
+  minute_offset: 5
+  # 上游（易校园）在每小时第 26~28 分钟刷新余额 —— 2026-09-26 实测，
+  # 60 个样本、连续两次跳变窗口完全重合。
+  # minute_offset 设成 5 意味着采样点在更新前 22 分钟、上次更新后 38 分钟，
+  # 两头都留得开，上游抖动几分钟也不会踩到边界（踩边界 = 某小时用量算成 2 倍或 0）。
+  # 同理不要改成 27 附近。
+
+  # 每次采集附加 0~N 秒随机抖动，避免固定时刻打上游
+  jitter_seconds: 90
+  min_gap_seconds: 300
+  # 单次采集失败重试次数与间隔
+  retry: 3
+  retry_delay_seconds: 20
+
+alerts:
+  enabled: true
+
+  # ---- 邮件告警（推荐，不用装任何库）----
+  email:
+    enabled: false
+    # QQ邮箱 smtp.qq.com / 163 smtp.163.com / Gmail smtp.gmail.com / 学校自建 smtp.xxx.edu.cn
+    smtp_host: smtp.qq.com
+    smtp_port: 465            # 465=SSL(推荐)  587=STARTTLS  25=明文
+    use_ssl: true
+    username: "你的邮箱@qq.com"
+    # ⚠️ 这里填「授权码」不是登录密码！
+    # QQ邮箱：设置 → 账户 → 开启SMTP服务 → 生成授权码
+    # 163邮箱：设置 → POP3/SMTP/IMAP → 开启 → 获取授权码
+    password: ""
+    from_addr: ""             # 留空则用 username
+    to_addrs:                 # 收件人，可写多个
+      - "你的邮箱@qq.com"
+    subject_prefix: "[寝室电费]"
+
+  # ---- Webhook（可选，与邮件可同时用）----
+  # 企业微信机器人 / 钉钉 / Bark / Server酱 的地址都可以
+  webhook_url: ""
+
+  dedupe_hours: 12            # 同级告警静默期，避免每轮采集都刷你
+
+  # ---- 各类告警开关 ----
+  rules:
+    low_balance: true         # 余额低于 warn_kwh / critical_kwh
+    spike: true               # 单日消耗异常偏高（MAD 离群）
+    stale: true               # 数据卡住（余额长时间完全不变）
+    stale_hours: 12           # 连续多少小时一分钱没动就报
+    session_expired: true     # 登录会话过期，需要重新验证码登录
+    collect_failed: true      # 连续采集失败
+    collect_failed_times: 3   # 连续失败几次后报警
+    forecast_days: 7          # 预计 N 天内耗尽就提前预警
+
+# 空置期：放假/实习期间宿舍没人，那几天的消耗不该算进日均
+vacancy:
+  auto: true            # 自动识别（连续 4 天以上掉到平时水平的 25%）
+  ratio: 0.25
+  min_days: 4
+  # 手动指定最可靠 —— 你清楚自己什么时候不在
+  periods: []
+  # periods:
+  #   - { from: "2026-07-01", to: "2026-08-31", note: "暑假" }

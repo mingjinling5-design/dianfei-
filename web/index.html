@@ -1,0 +1,1344 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#ffffff" />
+<title>寝室电费</title>
+<!-- 加到手机主屏幕后按 App 打开 -->
+<link rel="manifest" href="/manifest.webmanifest" />
+<link rel="icon" href="/icons/favicon.png" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="寝室电费" />
+<script src="/vendor/echarts.min.js"></script>
+<style>
+  :root{
+    --bg:#f5f6f8; --card:#fff; --line:#e8eaed; --line2:#f0f1f3;
+    --fg:#1f2329; --sub:#8a919f; --faint:#b0b6c0;
+    --brand:#2563eb; --brand-soft:#eff4ff;
+    --ok:#10b981; --warn:#f59e0b; --crit:#ef4444;
+    --r:14px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--fg);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--brand);text-decoration:none}
+  button,select{font-family:inherit;font-size:14px;color:var(--fg)}
+
+  /* ---------- 顶栏 ---------- */
+  header{
+    position:sticky;top:0;z-index:30;background:rgba(255,255,255,.9);
+    backdrop-filter:saturate(180%) blur(12px);
+    border-bottom:1px solid var(--line);
+  }
+  .bar{max-width:1080px;margin:0 auto;padding:12px 16px;
+       display:flex;align-items:center;gap:10px}
+  .bar h1{margin:0;font-size:16px;font-weight:600;letter-spacing:.2px}
+  .bar .room{color:var(--sub);font-size:13px;margin-left:2px;
+             overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .grow{flex:1}
+  .ctl{display:flex;gap:8px;align-items:center}
+  .ctl select,.ctl button{
+    background:#fff;border:1px solid var(--line);border-radius:9px;
+    padding:7px 11px;line-height:1.2;cursor:pointer;transition:border-color .15s;
+  }
+  .ctl select:hover,.ctl button:hover{border-color:#cfd4dc}
+  .ctl button.on{background:var(--brand-soft);border-color:#c7dbff;color:var(--brand)}
+  .upd{font-size:11px;color:var(--faint);margin-top:2px;font-variant-numeric:tabular-nums;
+        overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+  .upd.stale{color:#b45309;font-weight:600}
+
+  /* ---------- 时间范围 ---------- */
+  .rangehead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+      background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+      padding:11px 16px;margin-bottom:14px}
+  .rangehead .t{color:var(--sub);font-size:12.5px}
+  .seg{display:inline-flex;background:#f3f4f6;border-radius:9px;padding:2px}
+  .seg button{background:transparent;border:0;border-radius:7px;padding:5px 12px;
+      font-size:12.5px;color:var(--sub);cursor:pointer;line-height:1.5;white-space:nowrap}
+  .seg button.on{background:#fff;color:var(--fg);font-weight:600;
+      box-shadow:0 1px 2px rgba(0,0,0,.06)}
+  .daterange{display:flex;align-items:center;gap:6px}
+  .daterange input[type=date]{
+      border:1px solid var(--line);border-radius:9px;padding:5px 8px;font-size:12.5px;
+      font-family:inherit;color:var(--fg);background:#fff;outline:none;
+      font-variant-numeric:tabular-nums}
+  .daterange input[type=date]:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(37,99,235,.08)}
+  .daterange .tilde{color:var(--faint);font-size:12px}
+  .cardhead{display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap}
+  /* 费用对比：窄屏时让标签独占一行，数字换到下一行右对齐。
+     否则 .r 的 nowrap 会把左侧标签挤到几乎看不见（实测只剩 13px）。 */
+  @media(max-width:620px){
+    .cmp{flex-wrap:wrap;row-gap:2px}
+    .cmp .l{flex:1 1 100%}
+    .cmp .r{width:100%;justify-content:flex-end}
+    .rangehead{padding:10px 14px}
+    .rangehead .seg{width:100%;justify-content:space-between;order:3}
+    .rangehead .seg button{flex:1;padding:5px 2px;text-align:center;font-size:12px}
+    .rangehead .t{display:none}
+    .daterange{width:100%;justify-content:space-between}
+    .daterange input[type=date]{flex:1;min-width:0}
+    .cardhead .seg{width:100%}
+    .cardhead .seg button{flex:1;text-align:center}
+  }
+
+  /* ---------- 布局 ---------- */
+  main{max-width:1080px;margin:0 auto;padding:16px 16px 48px}
+  .grid{display:grid;gap:14px;grid-template-columns:1fr}
+  @media(min-width:860px){ .grid.two{grid-template-columns:1fr 1fr} }
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+  .card h2{margin:0 0 2px;font-size:14.5px;font-weight:600}
+  .card .sub{color:var(--sub);font-size:12.5px;margin:0 0 10px}
+  .sec{margin-top:14px}
+
+  /* ---------- 主卡 ---------- */
+  .hero{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+        padding:22px 18px;margin-bottom:14px}
+  .hero .label{color:var(--sub);font-size:13px}
+  .hero .big{font-size:40px;font-weight:700;letter-spacing:-1px;line-height:1.15;
+             margin:2px 0 0;font-variant-numeric:tabular-nums}
+  .hero .big .u{font-size:17px;font-weight:500;color:var(--sub);margin-left:4px}
+  .hero .days{font-size:15px;margin-top:8px}
+  .hero .days b{font-size:17px}
+  .hero .hint{color:var(--sub);font-size:13px;margin-top:3px}
+  .meter{height:6px;border-radius:4px;background:var(--line2);overflow:hidden;margin:14px 0 0}
+  .meter i{display:block;height:100%;border-radius:4px;background:var(--ok);transition:width .4s}
+  .meter.warn i{background:var(--warn)} .meter.crit i{background:var(--crit)}
+
+  .quick{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:16px;
+         padding-top:16px;border-top:1px solid var(--line2)}
+  .quick div{text-align:center}
+  .quick .k{color:var(--sub);font-size:12px}
+  .quick .v{font-size:16px;font-weight:600;margin-top:2px;font-variant-numeric:tabular-nums}
+
+  /* ---------- 分摊预估 ---------- */
+  .split{margin-top:16px;padding-top:16px;border-top:1px solid var(--line2)}
+  .splitHead{display:flex;align-items:center;gap:8px}
+  .splitHead .k{color:var(--sub);font-size:12.5px}
+  .seg{display:inline-flex;background:#f3f4f6;border-radius:8px;padding:2px}
+  .seg button{background:transparent;border:0;border-radius:6px;padding:4px 11px;
+              font-size:12.5px;color:var(--sub);cursor:pointer;line-height:1.5}
+  .seg button.on{background:#fff;color:var(--fg);font-weight:600;
+                 box-shadow:0 1px 2px rgba(0,0,0,.06)}
+  .splitMain{font-size:21px;font-weight:700;margin-top:7px;
+             font-variant-numeric:tabular-nums;letter-spacing:-.3px}
+  .splitMain small{font-size:13px;font-weight:400;color:var(--sub);margin-left:3px}
+  .splitSub{color:var(--sub);font-size:12.5px;margin-top:2px}
+  .splitRecharge{color:var(--sub);font-size:12.5px;margin-top:5px;
+                 padding-top:5px;border-top:1px dashed var(--line2)}
+
+  /* ---------- 提示条 ---------- */
+  .note{display:flex;gap:9px;align-items:flex-start;padding:11px 13px;border-radius:11px;
+        font-size:13px;margin-bottom:14px;line-height:1.6}
+  .note.warn{background:#fffbeb;border:1px solid #fde68a;color:#8a5a00}
+  .note.crit{background:#fef2f2;border:1px solid #fecaca;color:#9b2c2c}
+  .note.info{background:var(--brand-soft);border:1px solid #d8e5ff;color:#1e40af}
+
+  /* ---------- 图表 ---------- */
+  .chart{width:100%;height:240px}
+  .chart.tall{height:290px}
+  .chart.sm{height:200px}
+
+  /* ---------- 列表/表格 ---------- */
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{padding:9px 8px;text-align:left;border-bottom:1px solid var(--line2);white-space:nowrap}
+  th{color:var(--sub);font-weight:500;font-size:12.5px}
+  tr:last-child td{border-bottom:0}
+  .scroll{max-height:290px;overflow:auto;-webkit-overflow-scrolling:touch}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+
+  /* 窄屏：说明列允许换行，否则表格会撑出容器 */
+  @media(max-width:640px){
+    th,td{padding:8px 6px;font-size:13px}
+    td{white-space:normal;word-break:break-word}
+    td.num,th.num,th:first-child,td:first-child{white-space:nowrap}
+  }
+  /* 更窄（360/390 的手机）：5 列表格（充值）会撑到 381px，
+     实测超过视口 —— 收紧内边距和字号，并允许数字列换行 */
+  @media(max-width:480px){
+    th,td{padding:6px 3px;font-size:12px}
+    th{font-size:11px}
+    td.num,th.num{white-space:normal}
+    .carry{font-size:9.5px;margin-top:0}
+    .tag{margin-left:3px;padding:1px 4px;font-size:10px}
+  }
+  .tag{display:inline-block;padding:1.5px 8px;border-radius:6px;font-size:12px;line-height:1.5}
+  .tag.ok{background:#ecfdf5;color:#047857}
+  .tag.warn{background:#fffbeb;color:#b45309}
+  .tag.crit{background:#fef2f2;color:#b91c1c}
+  .tag.grey{background:#f3f4f6;color:#6b7280}
+
+  .empty{color:var(--faint);font-size:13.5px;padding:28px 0;text-align:center}
+  .dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:6px;vertical-align:1px}
+
+  /* ---------- 页脚 ---------- */
+  footer{max-width:1080px;margin:0 auto;padding:0 16px 40px;color:var(--faint);font-size:12px}
+  footer details{border-top:1px solid var(--line);padding-top:12px;margin-top:6px}
+  footer summary{cursor:pointer;color:var(--sub);font-size:12.5px;list-style:none}
+  footer summary::-webkit-details-marker{display:none}
+  footer summary::before{content:"▸ ";transition:.2s}
+  footer details[open] summary::before{content:"▾ "}
+  footer .body{padding:10px 0 0;line-height:1.9}
+  footer code{background:#f3f4f6;padding:1px 5px;border-radius:4px;font-size:11.5px}
+
+  #loading{text-align:center;color:var(--sub);padding:60px 0;font-size:14px}
+  .hide{display:none}
+
+  /* ---------- 分析建议 ---------- */
+  .ins{display:flex;gap:11px;padding:12px 0;border-bottom:1px solid var(--line2)}
+  .ins:last-child{border-bottom:0;padding-bottom:2px}
+  .ins .ico{font-size:17px;line-height:1.4;flex:none;width:22px;text-align:center}
+  .ins .t{font-size:14px;font-weight:600;line-height:1.5}
+  .ins .d{color:var(--sub);font-size:13px;margin-top:3px;line-height:1.7}
+  .ins.crit .t{color:#b91c1c}
+  .ins.warn .t{color:#b45309}
+  .ins.info .t{color:var(--fg)}
+  .ins.ok   .t{color:#047857}
+
+  /* ---------- 花费对比 ---------- */
+  .cmp{display:flex;align-items:center;gap:10px;padding:11px 0;
+       border-bottom:1px solid var(--line2);font-size:14px}
+  .cmp:last-child{border-bottom:0;padding-bottom:2px}
+  .cmp .l{flex:1;min-width:0}
+  .cmp .l .hint{display:block;color:var(--faint);font-size:11.5px;margin-top:1px}
+  .cmp .r{display:flex;align-items:baseline;gap:7px;white-space:nowrap;
+          font-variant-numeric:tabular-nums}
+  .cmp .prev{color:var(--sub)}
+  .cmp .who{color:var(--faint);font-size:11px;margin-right:-3px}
+  .cmp .arrow{color:var(--faint);font-size:12px}
+  .cmp .cur{font-weight:600}
+  .cmp .pct{font-size:12.5px;min-width:52px;text-align:right}
+  .cmp .pct.up{color:var(--crit)} .cmp .pct.down{color:var(--ok)}
+  .cmp .pct.flat{color:var(--sub)}
+  .cmp.muted{color:var(--faint);font-size:13px;padding:10px 0}
+  .cmp.muted .r{font-size:12.5px;color:var(--faint);white-space:normal;text-align:right}
+
+  /* ---------- 功率 ---------- */
+  .powerbox{margin-top:14px;padding-top:14px;border-top:1px solid var(--line2)}
+  .pw{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center}
+  .pw .k{color:var(--sub);font-size:12px}
+  .pw .v{font-size:17px;font-weight:600;margin-top:2px;font-variant-numeric:tabular-nums}
+  .pw .v small{font-size:12px;font-weight:400;color:var(--sub);margin-left:2px}
+  .pw .d{color:var(--faint);font-size:11.5px;margin-top:1px}
+  .bands{margin-top:14px}
+  .band{display:flex;align-items:center;gap:9px;font-size:12.5px;padding:4px 0}
+  .band .nm{width:48px;flex:none;color:var(--sub)}
+  .band .bar{flex:1;height:8px;border-radius:5px;background:var(--line2);overflow:hidden}
+  .band .bar i{display:block;height:100%;border-radius:5px;background:#93b4f7}
+  .band .hh{width:52px;flex:none;text-align:right;font-variant-numeric:tabular-nums}
+  .band .eg{color:var(--faint);font-size:11.5px;flex:1;min-width:0;
+            overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  @media(max-width:520px){ .band .eg{display:none} }
+
+  .calc{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin:4px 0 0}
+  .calc label{display:flex;align-items:center;gap:6px;font-size:13.5px;color:var(--sub);
+              margin:0;white-space:nowrap}
+  .calc input{width:88px;padding:8px 10px;font-size:14px;border:1px solid var(--line);
+              border-radius:9px;text-align:right;font-variant-numeric:tabular-nums}
+  .calc input:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px rgba(37,99,235,.08)}
+  .calcOut{font-size:14px;font-weight:600;color:var(--brand)}
+  .presets{margin-top:12px;display:flex;gap:7px;flex-wrap:wrap}
+  .presets button{font-size:12.5px;padding:5px 11px;border-radius:8px;background:#f7f8fa;
+                  border:1px solid var(--line);color:var(--sub);cursor:pointer}
+  .presets button:hover{border-color:#cfd4dc;color:var(--fg)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="bar">
+    <h1>⚡ 寝室电费</h1>
+    <span class="room" id="roomName"></span>
+    <span class="upd" id="updatedAt"></span>
+    <span class="grow"></span>
+    <div class="ctl">
+      <select id="unitSel" title="单位">
+        <option value="cny">元</option>
+        <option value="kwh">度</option>
+      </select>
+      <button id="refresh" title="刷新">刷新</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div id="loading">加载中…</div>
+
+  <div id="app" class="hide">
+    <div id="notes"></div>
+
+    <!-- 主卡 -->
+    <div class="hero">
+      <div class="label">当前余额</div>
+      <div class="big" id="heroBalance">—</div>
+      <div class="meter" id="heroMeter"><i style="width:0"></i></div>
+      <div class="days" id="heroDays"></div>
+      <div class="hint" id="heroHint"></div>
+
+      <!-- 分摊预估 -->
+      <div class="split">
+        <div class="splitHead">
+          <span class="k">分摊预估</span>
+          <span class="grow"></span>
+          <span class="seg" id="peopleSeg"></span>
+        </div>
+        <div class="splitMain" id="splitMain">—</div>
+        <div class="splitSub" id="splitSub"></div>
+        <div class="splitRecharge" id="splitRecharge" style="display:none"></div>
+      </div>
+
+      <div class="quick" id="quick"></div>
+    </div>
+
+    <!-- 分析建议 -->
+    <div class="card">
+      <h2>分析建议</h2>
+      <div id="insights"></div>
+    </div>
+
+    <!-- 花费对比 -->
+    <div class="card sec">
+      <h2>费用对比</h2>
+      <p class="sub" id="compareSub"></p>
+      <div id="compare"></div>
+    </div>
+
+    <!-- 时间范围 + 趋势图 -->
+    <div class="rangehead sec">
+      <span class="t">时间范围</span>
+      <div class="seg" id="rangeSeg">
+        <button data-d="7">近 7 天</button>
+        <button data-d="30">近 30 天</button>
+        <button data-d="90">近 90 天</button>
+        <button data-d="365">近一年</button>
+      </div>
+      <span class="grow"></span>
+      <div class="daterange">
+        <input type="date" id="fromDate" />
+        <span class="tilde">~</span>
+        <input type="date" id="toDate" />
+      </div>
+    </div>
+
+    <div class="grid two">
+      <div class="card">
+        <h2>余额趋势</h2>
+        <p class="sub" id="balanceSub"></p>
+        <div class="chart tall" id="c-balance"></div>
+      </div>
+      <div class="card">
+        <h2>每日用电费用</h2>
+        <p class="sub" id="dailySub"></p>
+        <div class="chart tall" id="c-daily"></div>
+      </div>
+    </div>
+
+    <!-- 24 小时画像（带日期选择） -->
+    <div class="card sec">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div>
+          <h2>日内各时段用电</h2>
+          <p class="sub" id="hourlySub" style="margin-bottom:0"></p>
+        </div>
+        <span class="grow"></span>
+        <div class="ctl">
+          <select id="daySel"></select>
+        </div>
+      </div>
+      <div class="chart tall" id="c-hourly" style="margin-top:12px"></div>
+      <div id="powerBox" class="powerbox"></div>
+    </div>
+
+    <!-- 用电作息画像（模型学习：去掉空调后的钟点规律） -->
+    <div class="card sec" id="clockCard" style="display:none">
+      <h2>用电作息画像</h2>
+      <p class="sub" id="clockSub"></p>
+      <div class="chart" id="c-clock" style="height:220px"></div>
+    </div>
+
+    <!-- 电器估算 -->
+    <div class="card sec">
+      <h2>电器耗电估算</h2>
+      <p class="sub">按 0.538 元/度 估算</p>
+      <div class="calc">
+        <label>功率 <input id="calcW" type="number" min="1" max="5000" step="50" value="1000" inputmode="numeric" /> 瓦</label>
+        <label>每天开 <input id="calcH" type="number" min="0.5" max="24" step="0.5" value="8" inputmode="decimal" /> 小时</label>
+        <div class="calcOut" id="calcOut"></div>
+      </div>
+      <div class="presets" id="calcPresets"></div>
+    </div>
+
+    <!-- 充值周期 -->
+    <div class="card sec">
+      <h2>历次充值使用时长</h2>
+      <p class="sub" id="cycleSub"></p>
+      <div class="scroll" id="cycles"></div>
+    </div>
+
+    <div class="grid two sec">
+      <div class="card">
+        <h2>每日费用分布</h2>
+        <p class="sub" id="distSub"></p>
+        <div class="chart" id="c-dist"></div>
+      </div>
+      <div class="card">
+        <h2>按星期对比</h2>
+        <p class="sub">按星期统计的日均费用</p>
+        <div class="chart" id="c-weekday"></div>
+      </div>
+    </div>
+
+    <div class="card sec">
+      <div class="cardhead">
+        <div>
+          <h2>各日各时段用电</h2>
+          <p class="sub" style="margin-bottom:0">颜色越深表示该时段费用越高</p>
+        </div>
+        <span class="grow"></span>
+        <div class="seg" id="heatSeg">
+          <button data-d="7">近 7 天</button>
+          <button data-d="30">近 30 天</button>
+          <button data-d="90">近 90 天</button>
+        </div>
+      </div>
+      <div class="chart tall" id="c-heatmap" style="margin-top:12px"></div>
+    </div>
+
+    <div class="card sec">
+      <h2>记录</h2>
+      <p class="sub">充值与异常事件</p>
+      <div class="scroll" id="events"></div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <details>
+    <summary>关于这些数据</summary>
+    <div class="body">
+      <div id="aboutText"></div>
+      <div style="margin-top:8px">
+        数据来自易校园，凭据只保存在本机。
+      </div>
+    </div>
+  </details>
+</footer>
+
+<script>
+const $ = s => document.querySelector(s);
+const state = { room:null, days:30, charts:{}, unit:"kwh", viewUnit:"cny", price:0.538,
+                people:4, peopleOptions:[4,5], summary:null, from:null, to:null,
+                heatDays:30 };
+
+/* ---------------- 日期工具 ---------------- */
+function iso(d){ return d.toISOString().slice(0,10); }
+function addDays(n){ const d = new Date(); d.setDate(d.getDate()+n); return iso(d); }
+
+// 快捷区间 → 填进两个日期框（日期框始终是唯一事实来源，避免两边不同步）
+function setRangeDays(n){
+  state.from = addDays(-(n-1));
+  state.to = iso(new Date());
+  syncRangeInputs();
+  markRangeSeg();
+  load();
+}
+function syncRangeInputs(){
+  $("#fromDate").value = state.from || "";
+  $("#toDate").value = state.to || "";
+}
+function markRangeSeg(){
+  const n = Math.round((new Date(state.to) - new Date(state.from)) / 86400000) + 1;
+  const today = iso(new Date());
+  const isEnd = state.to === today;
+  document.querySelectorAll("#rangeSeg button").forEach(b =>
+    b.classList.toggle("on", isEnd && +b.dataset.d === n));
+}
+
+/* ---------------- 工具 ---------------- */
+const pad = n => String(n).padStart(2,"0");
+function n2(v, d=2){ return (v===null||v===undefined||isNaN(v)) ? "—" : Number(v).toFixed(d); }
+function unit(){ return state.viewUnit === "kwh" ? "度" : "元"; }
+function money(v){ return n2(v) + " 元"; }
+
+/* 后端给的原生单位是元；这里按用户选择的单位换算 */
+function cv(v){
+  if (v===null||v===undefined) return null;
+  return state.viewUnit === "kwh" ? v / (state.price||0.538) : v;
+}
+function cvd(v){ return state.viewUnit === "kwh" ? n2(v,1) : n2(v); }
+
+async function get(path, extra={}){
+  const p = { ...extra, ...(state.room ? {room:state.room} : {}) };
+  // 自定义范围优先；两个日期都是范围的一部分
+  if (state.from) p.from = state.from;
+  if (state.to) p.to = state.to;
+  const qs = new URLSearchParams(p);
+  // _t=时间戳：让每次请求的 URL 都不同。
+  // 服务端虽然发了 Cache-Control: no-store，但部分手机浏览器、微信内置浏览器
+  // 和运营商代理会无视它 —— 唯一的参数是唯一能保证拿到新数据的办法。
+  qs.set("_t", String(Date.now()));
+  // cache:"no-store" 双保险
+  const r = await fetch(path + "?" + qs, { cache: "no-store" });
+  if (!r.ok) throw new Error((await r.text()).slice(0,200));
+  return r.json();
+}
+function chart(id){
+  const el = document.getElementById(id);
+  if (!el) return null;
+  if (!state.charts[id]) state.charts[id] = echarts.init(el, null, {renderer:"canvas"});
+  return state.charts[id];
+}
+// 等两帧，确保布局（尤其是容器宽度）已经生效。
+// ⚠️ 必须带超时兜底：后台标签页里 rAF 会被节流甚至完全不触发，
+//    只等 rAF 的话 await 会永远卡住，图表一个都画不出来。
+const nextFrame = () => new Promise(resolve => {
+  let done = false;
+  const fin = () => { if (!done) { done = true; resolve(); } };
+  try { requestAnimationFrame(() => requestAnimationFrame(fin)); } catch (e) { /* 忽略 */ }
+  setTimeout(fin, 350);
+});
+function resizeAll(){
+  Object.values(state.charts).forEach(c => { try{ c.resize(); }catch(e){} });
+}
+// 窄屏收窄边距，否则 360px 手机上绘图区只剩一点点
+const isNarrow = () => window.innerWidth < 520;
+const gl = () => isNarrow() ? 32 : 44;
+const gr = () => isNarrow() ? 8 : 16;
+
+const AX = { axisLine:{lineStyle:{color:"#e8eaed"}}, axisTick:{show:false},
+             axisLabel:{color:"#8a919f",fontSize:11},
+             splitLine:{lineStyle:{color:"#f2f3f5"}} };
+const BASE = { backgroundColor:"transparent", textStyle:{color:"#1f2329",fontSize:12},
+               tooltip:{backgroundColor:"#fff",borderColor:"#e8eaed",borderWidth:1,
+                        textStyle:{color:"#1f2329",fontSize:12.5},
+                        extraCssText:"box-shadow:0 4px 16px rgba(0,0,0,.1);border-radius:10px;"},
+               grid:{left:44,right:16,top:28,bottom:32} };
+function block(title, lines){ return `<b>${title}</b><br/>` + lines.join("<br/>"); }
+// 毫秒时间戳 → “09-26 10:51”
+function fmtTime(ms){
+  const d = new Date(ms);
+  return `${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+// 副标题为空时隐藏，避免留一条空行
+function setSub(sel, text){
+  const el = $(sel);
+  if (!el) return;
+  el.textContent = text || "";
+  el.style.display = text ? "" : "none";
+}
+// "2026-10-08" → "10月8日"
+function fmtDay(iso){
+  if (!iso) return "";
+  const p = iso.split("-");
+  return `${+p[1]}月${+p[2]}日`;
+}
+
+/* ---------------- 数据更新时间 ---------------- */
+// 页头常显「更新于 HH:MM」—— 数据到底是新的还是停住了，一眼就能看出来。
+function renderUpdated(s){
+  const el = $("#updatedAt");
+  if (!el) return;
+  const ts = s.last_reading_ts;
+  if (!ts){
+    el.textContent = "尚无数据";
+    el.classList.add("stale");
+    return;
+  }
+  const d = new Date(ts);
+  const mins = s.freshness_minutes;
+  const iv = s.expect_interval_minutes || 60;
+  let txt = `数据更新于 ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  if (mins != null){
+    if (mins < 1) txt = "数据刚刚更新";
+    else if (mins < 60) txt += `（${Math.round(mins)} 分钟前）`;
+    else if (mins < 1440) txt += `（${Math.floor(mins/60)} 小时前）`;
+    else txt += `（${Math.floor(mins/1440)} 天前）`;
+  }
+  // 把「自动采集什么时候跑」也写出来 —— 用户看不到调度，就没法判断它是否在工作
+  if (s.auto_collect && s.next_collect_at){
+    const nd = new Date(s.next_collect_at);
+    txt += ` · 每 ${iv} 分钟自动采集，下次 ${pad(nd.getHours())}:${pad(nd.getMinutes())}`;
+  } else if (!s.auto_collect){
+    txt += " · 自动采集已关闭";
+  }
+  el.textContent = txt;
+  el.classList.toggle("stale", mins != null && mins > iv * 2);
+}
+
+/* ---------------- 分摊预估 ---------------- */
+// 每天花多少 → 每月合计 → 按人数摊。速率取拟合出来的日耗（rate_per_day），
+// 没有拟合值时退回近 7 天均值。
+function splitRate(s){
+  const r = (s && s.rate_per_day) || (s && s.avg7) || 0;
+  return r > 0 ? r : 0;
+}
+function renderSplit(){
+  const s = state.summary;
+  if (!s) return;
+  const u = unit();
+  const perDay = splitRate(s);              // 原生单位/天
+  const monthly = perDay * 30;              // 原生单位/月
+  const n = state.people;
+  const perPerson = monthly / n;
+  const topUp = s.recharge_suggest || 0;
+
+  const seg = $("#peopleSeg");
+  if (!seg.dataset.built){
+    seg.innerHTML = (state.peopleOptions || [4, 5])
+      .map(p => `<button data-p="${p}">${p} 人</button>`).join("");
+    seg.dataset.built = "1";
+    seg.querySelectorAll("button").forEach(b => {
+      b.onclick = () => {
+        state.people = +b.dataset.p;
+        try{ localStorage.setItem("ysp_people", String(state.people)); }catch(e){}
+        renderSplit();
+      };
+    });
+  }
+  seg.querySelectorAll("button").forEach(b =>
+    b.classList.toggle("on", +b.dataset.p === n));
+
+  if (perDay <= 0){
+    $("#splitMain").innerHTML = `—`;
+    $("#splitSub").textContent = "数据不足，暂无法估算";
+    return;
+  }
+
+  $("#splitMain").innerHTML = `每人每月 ${n2(cv(perPerson),0)}<small>${u}</small>`;
+
+  const ex = s.excluded || {};
+  const band = (s.forecast || {}).rate_band || {};
+  const parts = [`${n} 人合计 ${n2(cv(monthly),0)} ${u}/月`];
+  // 模型给的是区间，不是单点。30 天外推本来就模糊，把范围说出来比藏起来好。
+  // optimistic = 速率低 = 用得慢 = 月耗低，别搞反。
+  if (band.optimistic > 0 && band.pessimistic > 0){
+    const lo = cv(band.optimistic * 30 / n);
+    const hi = cv(band.pessimistic * 30 / n);
+    if (hi - lo >= 2) parts.push(`大概 ${n2(lo,0)} ~ ${n2(hi,0)} ${u}`);
+  }
+  if (ex.vacant_days) parts.push(`已排除 ${ex.vacant_days} 天空置日`);
+  $("#splitSub").textContent = parts.join(" · ");
+
+  // 本次充值按人头摊 —— 宿舍实际就是按充值交钱的，比"每月"更贴实际
+  const cy = (state.cycles || [])[0];
+  const per = topUp > 1 ? topUp / n : null;
+  if (per){
+    $("#splitRecharge").innerHTML =
+      `下次充值 ${n2(cv(topUp),0)} ${u} 时，每人 ${n2(cv(per),0)} ${u}`;
+    $("#splitRecharge").style.display = "";
+  } else {
+    $("#splitRecharge").style.display = "none";
+  }
+}
+/* ---------------- 分析建议 ---------------- */
+function renderInsights(data){
+  const list = (data.insights||[]);
+  if (!list.length){
+    $("#insights").innerHTML = `<div class="empty">用电记录不足</div>`;
+    return;
+  }
+  const tone = { crit:"crit", warn:"warn", info:"info", good:"ok" };
+  $("#insights").innerHTML = list.map(it=>`
+    <div class="ins ${tone[it.level]||"info"}">
+      <div class="ico">${it.icon||"•"}</div>
+      <div>
+        <div class="t">${it.title}</div>
+        <div class="d">${it.text}</div>
+      </div>
+    </div>`).join("");
+  $("#insightSub") && ($("#insightSub").textContent = "");
+}
+
+/* ---------------- 花费对比 ---------------- */
+function renderCompare(cp){
+  const rows = [
+    ["今天",  cp.today, "与昨日同期对比"],
+    ["最近一周", cp.week, "与前若干天对比"],
+    ["最近一月", cp.month, "与前月同期对比"],
+    ["去年同期", cp.yoy, ""],
+    // null = 后端判定这一行和上一行是同一个对比窗口，已合并，直接不显示
+  ].filter(([, b]) => b !== null);
+  const html = rows.map(([fallback, b, hint])=>{
+    if (!b || !b.available){
+      return `<div class="cmp muted">
+        <div class="l">${fallback}</div>
+        <div class="r">${(b && b.reason) || "数据还不够"}</div>
+      </div>`;
+    }
+    // 窗口被缩短时（数据还在攒），标签跟着实际窗口走
+    const label = b.shortened ? b.name : fallback;
+    const pct = b.pct;
+    let cls = "flat", arrow = "→";
+    if (pct !== null && pct !== undefined){
+      if (pct > 5){ cls="up"; arrow="↑"; }
+      else if (pct < -5){ cls="down"; arrow="↓"; }
+    }
+    const pctTxt = (pct===null||pct===undefined) ? "" : `${arrow} ${pct>0?"+":""}${n2(pct,0)}%`;
+    // 把真实日期写出来 —— 「最近 N 天」不含今天，不写日期会被误解
+    const short = d => d ? d.slice(5) : "";
+    const curRange = b.cur_from ? (b.cur_from === b.cur_to ? short(b.cur_from)
+                                   : `${short(b.cur_from)} ~ ${short(b.cur_to)}`) : "";
+    const prevRange = b.prev_from ? (b.prev_from === b.prev_to ? short(b.prev_from)
+                                    : `${short(b.prev_from)} ~ ${short(b.prev_to)}`) : "";
+    // 顺序要和数字一致：数字是「前 → 最近」，所以区间也写「前 vs 最近」
+    const scope = b.scope ? b.scope
+                          : (curRange ? `${prevRange} vs ${curRange}` : hint);
+    // 两个数字各自标上是什么时段 —— 不标的话很容易读反
+    const whoPrev = b.previous_label || "之前";
+    const whoCur = b.current_label || "最近";
+    return `<div class="cmp">
+      <div class="l">${label}<span class="hint">${scope}</span></div>
+      <div class="r">
+        <span class="who">${whoPrev}</span>
+        <span class="prev">${n2(cv(b.previous))}</span>
+        <span class="arrow">→</span>
+        <span class="who">${whoCur}</span>
+        <span class="cur">${n2(cv(b.current))} ${unit()}</span>
+        <span class="pct ${cls}">${pctTxt}</span>
+      </div>
+    </div>`;
+  }).join("");
+  $("#compare").innerHTML = html;
+  setSub("#compareSub", "");
+}
+
+/* ---------------- 主卡 ---------------- */
+function renderHero(s){
+  const bal = cv(s.balance);
+  const lvl = s.level === "critical" ? "crit" : s.level === "warn" ? "warn" : "ok";
+
+  $("#heroBalance").innerHTML = `${n2(bal)}<span class="u">${unit()}</span>`;
+
+  // 进度条：相对 30 天的用量
+  const need = cv(s.recharge_suggest) || 0;
+  const base = Math.max((bal||0) + need, 1);
+  const pct = Math.min(100, Math.max(2, ((bal||0) / base) * 100));
+  const m = $("#heroMeter");
+  m.className = "meter " + (lvl === "ok" ? "" : lvl);
+  m.firstElementChild.style.width = pct + "%";
+
+  if (s.days_left != null){
+    $("#heroDays").innerHTML = `按天气预测估算，可用约 <b>${n2(s.days_left,1)} 天</b>`;
+    const b = (s.forecast && s.forecast.empty_date_band) || {};
+    $("#heroHint").textContent = b.optimistic && b.pessimistic && b.optimistic !== b.pessimistic
+      ? `预计 ${s.empty_date} 前后用完（最早 ${b.pessimistic}，最晚 ${b.optimistic}）`
+      : `预计 ${s.empty_date} 前后用完`;
+  } else {
+    $("#heroDays").innerHTML = `<span style="color:var(--sub)">暂时无法估算可用时长</span>`;
+    $("#heroHint").textContent = s.forecast && s.forecast.reason ? s.forecast.reason : "";
+  }
+
+  const warnAt = cv(s.warn_at), critAt = cv(s.critical_at);
+  let tip = "";
+  if (s.level === "critical") tip = `已经低于 ${n2(critAt,0)} ${unit()}，建议马上充值`;
+  else if (s.level === "warn") tip = `已低于提醒线 ${n2(warnAt,0)} ${unit()}，可以考虑充值`;
+  else if (s.topup && s.topup.available && s.recharge_suggest > 0){
+    const tp = s.topup;
+    const by = fmtDay(tp.by_date);
+    tip = tp.urgent
+      ? `建议立即充值 ${n2(cv(tp.amount),0)} ${unit()}，约可用 30 天`
+      : `建议 ${by}前充值 ${n2(cv(tp.amount),0)} ${unit()}，约可用 30 天`;
+  } else if (s.recharge_suggest > 0){
+    tip = `建议充值 ${n2(cv(s.recharge_suggest),0)} ${unit()}，约可用 30 天`;
+  }
+
+  state.summary = s;
+  renderUpdated(s);
+  renderSplit();
+  renderClock(s);
+
+  const days7 = Math.min(7, (s.rate_basis && s.rate_basis.usable_days) || 7);
+  $("#quick").innerHTML = `
+    <div><div class="k">今天</div><div class="v">${cvd(cv(s.today))} ${unit()}</div></div>
+    <div><div class="k">最近 ${days7} 天</div><div class="v">${cvd(cv(s.week))} ${unit()}</div></div>
+    <div><div class="k">日均</div><div class="v">${cvd(cv(s.avg7))} ${unit()}</div></div>`;
+
+  const notes = [];
+  if (tip) notes.push(`<div class="note ${lvl==='crit'?'crit':'info'}"><div>💡</div><div>${tip}</div></div>`);
+  renderNotes(notes, s);
+}
+
+function renderNotes(baseNotes, s){
+  const notes = baseNotes.slice();
+  const st = state.quality || {};
+  if (st.session && st.session.need_relogin){
+    notes.push(`<div class="note crit"><div>🔑</div><div>登录已过期，需要重新验证一次。<a href="/login">去登录</a></div></div>`);
+  } else if (st.stale_segments && st.stale_segments.length){
+    const g = st.stale_segments[st.stale_segments.length-1];
+    const hrs = Math.round(g.hours);
+    // 缺口不会消失（数据是真的缺），但几周前的旧事天天挂在顶上就成了噪音。
+    // 只在「进行中」或「刚结束 2 天内」置顶提醒，更早的收到折叠区里说。
+    const endedDays = g.end ? (Date.now() - new Date(g.end).getTime()) / 86400000 : 999;
+    if (g.ongoing || endedDays <= 2){
+      notes.push(`<div class="note warn"><div>⏸</div><div>
+        易校园数据有 <b>${hrs >= 48 ? Math.round(hrs/24) + " 天" : hrs + " 小时"}</b>未更新
+        （${g.start.slice(0,10)} 起${g.ongoing ? "，到现在" : ""}）。
+        该时段用电量无法统计，实际费用可能高于图示。</div></div>`);
+    }
+  }
+  // 空置期：放假回家那几天几乎不耗电，不能算进"日均"
+  const vs = (s && s.excluded && s.excluded.vacant_spans) || [];
+  if (vs.length){
+    const v = vs[vs.length-1];
+    notes.push(`<div class="note info"><div>🏠</div><div>
+      ${fmtDay(v.start)} ~ ${fmtDay(v.end)} 共 <b>${v.days} 天</b>用电量极低
+      （每天 ${v.avg} ${unit()}，平时约 ${v.normal} ${unit()}）。
+      已排除，不计入日均。</div></div>`);
+  }
+  if (st.fail_streak >= 3){
+    notes.push(`<div class="note warn"><div>📡</div><div>最近连续 ${st.fail_streak} 次没能读到数据，正在自动重试。</div></div>`);
+  }
+  // 数据陈旧：比采集周期还久没更新，明确说出来（否则用户只会觉得"页面没刷新"）
+  const fresh = st.freshness_minutes;
+  const iv = st.expect_interval_minutes || 60;
+  if (fresh != null && fresh > iv * 2 && !(st.session && st.session.need_relogin)){
+    const txt = fresh >= 1440 ? `${Math.floor(fresh/1440)} 天`
+             : fresh >= 60 ? `${Math.floor(fresh/60)} 小时` : `${Math.round(fresh)} 分钟`;
+    notes.push(`<div class="note warn"><div>🕒</div><div>
+      数据已经 <b>${txt}</b> 没有更新了（正常每 ${iv} 分钟一次）。
+      最后采集：${(st.last_collect || "—").replace("T", " ")}。</div></div>`);
+  }
+  $("#notes").innerHTML = notes.join("");
+}
+
+/* ---------------- 余额变化 ---------------- */
+function renderBalance(series, fc){
+  // 显式转成毫秒时间戳：直接给 ISO 字符串时，ECharts 的时间轴解析不稳定，
+  // 解析失败会退化成数值轴，轴上就显示成一长串毫秒数。
+  const T = s => new Date(s).getTime();
+  const pts = series.points.map(p => [T(p.ts), cv(p.cny)]);
+  const fcOn = fc && fc.available;
+  // 优先用小时级投影：逐小时按作息曲线下降，画出来是曲线而不是斜直线。
+  // 没有小时数据时退回日级投影（一天一个点）。
+  const hproj = (fcOn && Array.isArray(fc.hourly_projection) && fc.hourly_projection.length)
+    ? fc.hourly_projection : null;
+  const proj = hproj
+    ? hproj.map(p => ({t: T(p.ts), b: cv(p.balance),
+                       lo: cv(p.balance_lo ?? p.balance),
+                       hi: cv(p.balance_hi ?? p.balance)}))
+    : (fcOn ? fc.projection : []).map(p => {
+        const t = new Date(p.date + "T12:00:00").getTime();
+        return {t, b: cv(p.balance), lo: cv(p.balance_lo ?? p.balance),
+                hi: cv(p.balance_hi ?? p.balance)};
+      });
+  const last = series.points.length ? series.points[series.points.length-1] : null;
+  const head = last ? [[T(last.ts), cv(last.cny)]] : [];
+  const fp   = head.concat(proj.map(p => [p.t, p.b]));
+  const fpLo = head.concat(proj.map(p => [p.t, p.lo]));
+  const fpHi = head.concat(proj.map(p => [p.t, p.hi]));
+  const bandGap = fpHi.map((p, i) => [p[0], Math.max(0, p[1] - (fpLo[i] ? fpLo[i][1] : p[1]))]);
+
+  const marks = [];
+  (series.recharges||[]).forEach(r => marks.push({
+    coord:[T(r.ts), cv(r.kwh)], symbol:"circle", symbolSize:7,
+    itemStyle:{color:"#10b981"}, label:{show:false}}));
+
+  // 轴标签按时间跨度自适应
+  const spanH = pts.length > 1 ? (pts[pts.length-1][0] - pts[0][0]) / 3600000 : 24;
+
+  chart("c-balance").setOption({
+    ...BASE,
+    grid:{left:gl()+4,right:gr(),top:28,bottom:36},
+    tooltip:{...BASE.tooltip, trigger:"axis",
+      formatter: p => block(fmtTime(p[0].axisValue),
+        [`余额 <b>${n2(p[0].value[1])}</b> ${unit()}`])},
+    xAxis:{type:"time", ...AX,
+      axisLabel:{...AX.axisLabel, hideOverlap:true,
+        // 跨度小就带上小时，跨度大只显示月-日，避免轴上一堆重复的“00:00:00”
+        formatter: v => {
+          const d = new Date(v), day = `${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+          return spanH <= 48 ? `${day} ${pad(d.getHours())}:00` : day;
+        }}},
+    yAxis:{type:"value", ...AX, axisLabel:{...AX.axisLabel, formatter:v=>n2(v,0)}},
+    dataZoom:[{type:"inside"}],
+    series:[
+      {name:"余额", type:"line", showSymbol:false, smooth:.2, data:pts,
+       lineStyle:{width:2.4,color:"#2563eb"},
+       areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[
+         {offset:0,color:"rgba(37,99,235,.18)"},{offset:1,color:"rgba(37,99,235,0)"}])},
+       markPoint:{data:marks,symbolSize:7}},
+      // 预测区间：用两条堆叠线把中间填成浅色带
+      ...(fcOn ? [
+        {name:"区间下沿", type:"line", stack:"band", showSymbol:false, smooth:.2, data:fpLo,
+         lineStyle:{opacity:0}, areaStyle:{opacity:0}, silent:true, tooltip:{show:false}},
+        {name:"区间", type:"line", stack:"band", showSymbol:false, smooth:.2, data:bandGap,
+         lineStyle:{opacity:0}, areaStyle:{color:"rgba(199,210,254,.45)"},
+         silent:true, tooltip:{show:false}},
+        {name:"预计", type:"line", showSymbol:false, smooth:.2, data:fp,
+         lineStyle:{width:2,color:"#a5b4fc",type:[5,4]}},
+      ] : []),
+    ]
+  }, true);
+
+  const rc = (series.recharges||[]);
+  const parts = [];
+  if (rc.length) parts.push(`最近充值 ${rc[rc.length-1].ts.slice(0,10)}（${cvd(cv(rc[rc.length-1].kwh))} ${unit()}）`);
+  if (fcOn) parts.push(`按近期速度预计 ${fc.empty_date} 用完`);
+  $("#balanceSub").textContent = parts.join(" · ");
+}
+
+/* ---------------- 每天花了多少 ---------------- */
+function renderDaily(rows){
+  const use = rows.filter(d => d.usable !== false && d.kwh > 0);
+  const dates = use.map(d => d.date);
+  const vals = use.map(d => cv(d.kwh));
+  const avg = vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : 0;
+
+  // 明显偏高的那天
+  const sorted = [...vals].sort((a,b)=>a-b);
+  const med = sorted.length ? sorted[Math.floor(sorted.length/2)] : 0;
+  const hi = med * 2;
+
+  chart("c-daily").setOption({
+    ...BASE,
+    grid:{left:gl(),right:gr(),top:28,bottom:36},
+    tooltip:{...BASE.tooltip, trigger:"axis",
+      formatter: p => block(p[0].axisValue.slice(5),
+        [`花了 <b>${n2(p[0].value)}</b> ${unit()}`,
+         (p[0].value >= hi && med > 0) ? `<span style="color:#f59e0b">比平时多不少</span>` : ""].filter(Boolean))},
+    xAxis:{type:"category", data:dates, ...AX,
+      axisLabel:{...AX.axisLabel, formatter:v=>v.slice(5), hideOverlap:true}},
+    yAxis:{type:"value", ...AX, axisLabel:{...AX.axisLabel, formatter:v=>n2(v,0)}},
+    series:[
+      {type:"bar", data:vals.map((v,i)=>({value:v,
+        itemStyle:{borderRadius:[4,4,0,0],
+          color: (med>0 && v>=hi) ? "#fbbf24" : "#93b4f7"}})),
+       barMaxWidth:26,
+       markLine:{silent:true,symbol:"none",
+         lineStyle:{color:"#cbd5e1",type:"dashed",width:1},
+         label:{color:"#8a919f",fontSize:11,formatter:"平均 "+n2(avg,1)},
+         data:[{yAxis:avg}]}}
+    ]
+  }, true);
+
+  const total = vals.reduce((a,b)=>a+b,0);
+  $("#dailySub").textContent = vals.length
+    ? `最近 ${vals.length} 天共 ${cvd(total)} ${unit()}，日均 ${cvd(avg)} ${unit()}`
+    : "还没有足够的数据";
+}
+
+/* ---------------- 24 小时画像（可换日期） ---------------- */
+function renderHourly(data){
+  const hrs = data.hours || [];
+  const isToday = data.date === new Date().toISOString().slice(0,10);
+
+  const x = hrs.map(h=>pad(h.hour));
+  const y = hrs.map(h=>cv(h.kwh));
+  const max = Math.max(...y, 0.0001);
+  const top = (data.top_hours || []).filter(h => hrs[h] && hrs[h].kwh > 0);
+
+  chart("c-hourly").setOption({
+    ...BASE,
+    grid:{left:gl(),right:gr(),top:28,bottom:32},
+    tooltip:{...BASE.tooltip, trigger:"axis",
+      formatter: p => { const h = hrs[p[0].dataIndex];
+        const lines = [`花了 <b>${n2(p[0].value)}</b> ${unit()}`];
+        if (h.watts != null) lines.push(`平均功率 <b>${n2(h.watts,0)}</b> 瓦`);
+        if (h.power_example && h.watts >= 300) lines.push(`约等于在开：${h.power_example}`);
+        if (h.share) lines.push(`占当天 ${h.share}%`);
+        return block(`${pad(h.hour)}:00 - ${pad((h.hour+1)%24)}:00`, lines); }},
+    xAxis:{type:"category", data:x, ...AX,
+      axisLabel:{...AX.axisLabel, interval:1}},
+    yAxis:{type:"value", ...AX, axisLabel:{...AX.axisLabel, formatter:v=>n2(v,1)}},
+    series:[{
+      type:"bar", data:y.map(v=>({value:v,
+        itemStyle:{borderRadius:[4,4,0,0],
+          color: v >= max*0.75 ? "#2563eb" : (v >= max*0.4 ? "#93b4f7" : "#dbe6fb")}})),
+      barMaxWidth:22
+    }]
+  }, true);
+
+  const tips = [];
+  if (data.date) tips.push(`${data.date.slice(5).replace("-","月")}日`);
+  if (isToday) tips.push(`统计到 ${data.elapsed_hours} 点`);
+  tips.push(`当天共 ${cvd(data.total)} ${unit()}`);
+  if (top.length) tips.push(`高峰时段 ${top.map(h=>h+"点").join(" / ")}`);
+  $("#hourlySub").textContent = tips.join(" · ");
+
+  renderPower(data.power, data.hours);
+
+  const sel = $("#daySel");
+  if (sel.options.length !== (data.dates||[]).length){
+    sel.innerHTML = (data.dates||[]).map(d=>`<option value="${d}">${d}</option>`).join("");
+  }
+  if (data.date) sel.value = data.date;
+}
+
+/* ---------------- 用电作息画像（模型学习，已去掉空调） ---------------- */
+function renderClock(s){
+  const p = s.clock_profile;
+  if (!Array.isArray(p) || p.length !== 24){ $("#clockCard").style.display = "none"; return; }
+  $("#clockCard").style.display = "";
+  const u = unit();
+  const x = p.map((_,h)=>pad(h));
+  const y = p.map(v=>cv(v));
+  const max = Math.max(...y, 0.0001);
+  const pk = s.clock_peak || {};
+  chart("c-clock").setOption({
+    ...BASE,
+    grid:{left:gl(),right:gr(),top:24,bottom:30},
+    tooltip:{...BASE.tooltip, trigger:"axis",
+      formatter: q => block(`${pad(q[0].dataIndex)}:00 - ${pad((q[0].dataIndex+1)%24)}:00`,
+        [`作息基载 <b>${n2(q[0].value)}</b> ${u}/小时`])},
+    xAxis:{type:"category", data:x, ...AX, axisLabel:{...AX.axisLabel, interval:1}},
+    yAxis:{type:"value", ...AX, axisLabel:{...AX.axisLabel, formatter:v=>n2(v,2)}},
+    series:[{type:"bar", barMaxWidth:20,
+      data:y.map((v,h)=>({value:v, itemStyle:{borderRadius:[4,4,0,0],
+        color: h===pk.hour ? "#2563eb" : (v>=max*0.4 ? "#93b4f7" : "#dbe6fb")}}))}]
+  }, true);
+  const tips = ["每小时平均用电（已扣除空调）"];
+  if (pk.hour != null) tips.push(`${pad(pk.hour)} 点最高`);
+  $("#clockSub").textContent = tips.join(" · ");
+}
+
+/* ---------------- 功率 ---------------- */
+function renderPower(s, hours){
+  const box = $("#powerBox");
+  if (!s || !s.available){
+    box.innerHTML = `<div class="empty" style="padding:14px 0">当日数据不足以计算功率</div>`;
+    return;
+  }
+  const base = s.baseline_watts;
+  box.innerHTML = `
+    <div class="pw">
+      <div><div class="k">平均功率</div>
+           <div class="v">${n2(s.avg_watts,0)}<small>瓦</small></div>
+           <div class="d">全天平均</div></div>
+      <div><div class="k">最高功率</div>
+           <div class="v">${n2(s.peak_watts,0)}<small>瓦</small></div>
+           <div class="d">${s.peak_hour} 点左右${s.peak_level && s.peak_level!=="—" ? " · "+s.peak_level : ""}</div></div>
+      <div><div class="k">夜间平均功率</div>
+           <div class="v">${base!=null ? n2(base,0)+"<small>瓦</small>" : "—"}</div>
+           <div class="d">凌晨 2~6 点平均</div></div>
+    </div>
+    <div class="bands">${(s.bands||[]).map(b=>`
+      <div class="band">
+        <span class="nm">${b.level}</span>
+        <span class="bar"><i style="width:${Math.max(3,b.share)}%"></i></span>
+        <span class="hh">${b.hours} 小时</span>
+        <span class="eg">${b.example}</span>
+      </div>`).join("")}</div>`;
+
+  // 夜间功率折算成每月花多少。只给数字，不猜是哪个电器。
+  if (base != null && base >= 100){
+    const m = base/1000*24*30*state.price;
+    box.insertAdjacentHTML("beforeend",
+      `<p class="sub" style="margin:10px 0 0">
+         凌晨 2~6 点平均功率 ${n2(base,0)} 瓦，按月折算约 ${n2(m,0)} 元。</p>`);
+  }
+  box.insertAdjacentHTML("beforeend",
+    `<p class="sub" style="margin:8px 0 0;color:var(--faint)">按小时平均得出</p>`);
+}
+
+/* ---------------- 电器估算 ---------------- */
+const PRESETS = [
+  ["空调制冷", 1000, 8], ["空调制热", 1500, 8], ["台式电脑", 300, 6],
+  ["笔记本电脑", 65, 8], ["电风扇", 45, 10], ["烧水壶", 1800, 0.5],
+  ["小冰箱", 80, 24], ["电暖器", 2000, 6], ["台灯", 12, 5],
+];
+function renderCalc(){
+  const w = Math.max(0, +$("#calcW").value || 0);
+  const h = Math.max(0, +$("#calcH").value || 0);
+  const kwh = w / 1000 * h * 30;         // 每月度数
+  const cny = kwh * state.price;
+  $("#calcOut").textContent = `一个月约 ${n2(cny,0)} 元（${n2(kwh,1)} 度）`;
+}
+function renderPresets(){
+  $("#calcPresets").innerHTML = PRESETS
+    .map(([name, w, h]) => `<button data-w="${w}" data-h="${h}">${name}</button>`).join("");
+  $("#calcPresets").querySelectorAll("button").forEach(b => {
+    b.onclick = () => {
+      $("#calcW").value = b.dataset.w;
+      $("#calcH").value = b.dataset.h;
+      renderCalc();
+    };
+  });
+}
+
+/* ---------------- 充值周期 ---------------- */
+function renderCycles(data){
+  const rows = (data.cycles||[]).slice().reverse();
+  setSub("#cycleSub", "全部历史");
+  if (!rows.length){
+    $("#cycles").innerHTML = `<div class="empty">暂无充值记录<br/>充值后这里会显示每次充值的可用时长</div>`;
+    return;
+  }
+  const u = unit();
+  // 表格口径：每笔充值「之后」用了多少、还剩多少、撑了多久。
+  // 最后一笔还在进行中，数字会一直涨（之前统计的是充值之前，所以永远不变）。
+  $("#cycles").innerHTML = `<table>
+    <thead><tr>
+      <th>充值时间</th><th class="num">充值</th><th class="num">已用</th>
+      <th class="num">剩余</th><th class="num">撑了</th>
+    </tr></thead>
+    <tbody>${rows.map(c=>{
+      const left = cv(c.remaining);
+      const days = c.days > 0 ? n2(c.days,1)+" 天" : "—";
+      const tail = c.ongoing ? `<span class="tag">进行中</span>` : "";
+      // 充值前往往还有几块没花完，那部分会结转进来，撑的天数要算上它
+      const carry = cv(c.carry || 0);
+      const carryTag = carry > 0.5
+        ? `<small class="carry">+${n2(carry,1)} 结转</small>` : "";
+      return `<tr>
+        <td>${c.ts.slice(5,10)}${tail}</td>
+        <td class="num">${n2(cv(c.recharge))} ${u}${carryTag}</td>
+        <td class="num">${n2(cv(c.used))} ${u}</td>
+        <td class="num">${n2(left)} ${u}</td>
+        <td class="num">${days}</td>
+      </tr>`;
+    }).join("")}</tbody></table>`;
+}
+
+/* ---------------- 分布 ---------------- */
+function renderDistribution(d){
+  if (!d || !d.available){
+    chart("c-dist").clear();
+    $("#distSub").textContent = d && d.reason ? d.reason : "数据还不够";
+    return;
+  }
+  const bins = (d.bins||[]).map(b => ({...b, from: cv(b.from), to: cv(b.to)}));
+  chart("c-dist").setOption({
+    ...BASE,
+    grid:{left:gl()-4,right:gr()-2,top:28,bottom:40},
+    tooltip:{...BASE.tooltip, trigger:"axis",
+      formatter: p => block(p[0].axisValue + " " + unit(),
+        [`有 <b>${p[0].value}</b> 天落在这个区间`])},
+    xAxis:{type:"category", data:bins.map(b=>n2(b.from,1)), ...AX,
+      axisLabel:{...AX.axisLabel, rotate:40, fontSize:10, hideOverlap:true}},
+    yAxis:{type:"value", ...AX, axisLabel:{...AX.axisLabel, formatter:v=>n2(v,0)}},
+    series:[{type:"bar", data:bins.map(b=>b.count), barMaxWidth:26,
+      itemStyle:{borderRadius:[4,4,0,0], color:"#93b4f7"}}]
+  }, true);
+  $("#distSub").textContent =
+    `多数日子在 ${cvd(cv(d.median))} ${unit()} 以内，最高 ${cvd(cv(d.max))} ${unit()}`;
+}
+
+/* ---------------- 周内 ---------------- */
+function renderWeekday(list){
+  const use = (list||[]).filter(w => w.samples > 0);
+  chart("c-weekday").setOption({
+    ...BASE,
+    grid:{left:gl()-4,right:gr()-2,top:28,bottom:32},
+    tooltip:{...BASE.tooltip, trigger:"axis",
+      formatter: p => { const w = use[p[0].dataIndex];
+        return block(w.label, [`平均 <b>${n2(p[0].value)}</b> ${unit()}`,
+                               `${w.samples} 天数据`]); }},
+    xAxis:{type:"category", data:use.map(w=>w.label), ...AX},
+    yAxis:{type:"value", ...AX, axisLabel:{...AX.axisLabel, formatter:v=>n2(v,1)}},
+    series:[{type:"bar", data:use.map(w=>cv(w.avg_kwh)), barMaxWidth:32,
+      itemStyle:{borderRadius:[4,4,0,0], color:"#93b4f7"}}]
+  }, true);
+}
+
+/* ---------------- 热力图 ---------------- */
+function renderHeatmap(hm){
+  if (!hm || !hm.dates || !hm.dates.length){ chart("c-heatmap").clear(); return; }
+  const vals = hm.data.map(d => cv(d[2]));
+  chart("c-heatmap").setOption({
+    ...BASE,
+    grid:{left:isNarrow()?46:58,right:gr()-2,top:16,bottom:52},
+    tooltip:{...BASE.tooltip, position:"top",
+      formatter: p => `${hm.dates[p.value[1]]} ${pad(p.value[0])}:00<br/>花了 <b>${n2(p.value[2])}</b> ${unit()}`},
+    xAxis:{type:"category", data:[...Array(24).keys()].map(h=>pad(h)), ...AX,
+      axisLabel:{...AX.axisLabel, interval:1}},
+    yAxis:{type:"category", data:hm.dates.map(d=>d.slice(5)), ...AX, splitLine:{show:false}},
+    visualMap:{min:0, max:Math.max(...vals, 0.01), calculable:false, show:false,
+      inRange:{color:["#f1f5fb","#c7dbfb","#93b4f7","#5b8def","#2563eb"]}},
+    series:[{type:"heatmap", data:hm.data.map((d,i)=>[d[0],d[1],vals[i]]),
+      itemStyle:{borderColor:"#fff",borderWidth:2,borderRadius:3},
+      progressive:2000}]
+  }, true);
+}
+
+/* ---------------- 记录 ---------------- */
+function renderEvents(an){
+  const rows = [];
+  (an.stale||[]).forEach(s => rows.push({
+    ts: s.start, kind: s.ongoing ? "易校园数据未更新" : "易校园数据曾中断",
+    tone: "warn",
+    text: `${Math.round(s.hours) >= 48 ? Math.round(s.hours/24)+" 天" : Math.round(s.hours)+" 小时"}未发生变化`,
+    sort: s.start}));
+  (an.adjusts||[]).forEach(a => rows.push({
+    ts:a.ts, kind:"余额跳降", tone:"grey",
+    text:`${n2(cv(a.kwh))} ${unit()}（非实际用电）`, sort:a.ts}));
+  (an.recharges||[]).forEach(r => rows.push({
+    ts:r.ts, kind:"充值", tone:"ok",
+    text:`+${n2(cv(r.kwh))} ${unit()}`, sort:r.ts}));
+  (an.continuous_drain||[]).forEach(d => rows.push({
+    ts:d.start, kind:"长时间用电", tone:"warn",
+    text:`连续 ${n2(d.hours,0)} 小时，费用 ${n2(cv(d.kwh))} ${unit()}`, sort:d.start}));
+  (an.anomalies||[]).forEach(a => rows.push({
+    ts:a.date, kind:"用量偏高", tone:"warn",
+    text:`${n2(cv(a.kwh))} ${unit()}，日常约 ${n2(cv(a.expected))} ${unit()}`, sort:a.date}));
+
+  rows.sort((x,y)=> y.sort.localeCompare(x.sort));
+
+  $("#events").innerHTML = rows.length
+    ? `<table><thead><tr><th>时间</th><th>情况</th><th class="num">说明</th></tr></thead><tbody>${
+        rows.slice(0,60).map(r=>`<tr>
+          <td style="color:var(--sub)">${r.ts.replace("T"," ").slice(5,16)}</td>
+          <td><span class="tag ${r.tone}">${r.kind}</span></td>
+          <td class="num">${r.text}</td></tr>`).join("")
+      }</tbody></table>`
+    : `<div class="empty">暂无记录</div>`;
+}
+
+/* ---------------- 关于数据 ---------------- */
+function renderAbout(s, q){
+  const lines = [];
+  if (s.rate_basis){
+    const rb = s.rate_basis;
+    lines.push(`「日均」取自 ${rb.usable_days} 个完整用电日`
+      + (rb.excluded_today ? `，今天还没过完、没有计入` : "")
+      + (rb.excluded_stale_days ? `；另有 ${rb.excluded_stale_days} 天余额未变化，已跳过` : "") + "。");
+  }
+  if (q && q.stale_segments && q.stale_segments.length){
+    const t = q.stale_hours;
+    lines.push(`易校园有 ${t >= 48 ? n2(t/24,1)+" 天" : Math.round(t)+" 小时"}余额未发生变化，`
+      + `该时段用电量无法统计，图示费用可能低于实际。`);
+  }
+  if (q && q.coverage_pct != null && q.coverage_pct < 95){
+    lines.push(`有 ${100 - q.coverage_pct}% 的时间没读到数据。`);
+  }
+  lines.push(`电价按 ${state.price} 元/度 计算。`);
+  $("#aboutText").innerHTML = lines.map(l=>"· "+l).join("<br/>");
+}
+
+/* ---------------- 加载 ---------------- */
+function say(t){ $("#loading").textContent = t; $("#loading").classList.remove("hide"); $("#app").classList.add("hide"); }
+
+async function load(){
+  try{
+    const health = await fetch("/api/health").then(r=>r.json());
+    state.peopleOptions = health.people_options || [4, 5];
+    if (!state.peoplePinned){
+      const saved = (() => { try{ return +localStorage.getItem("ysp_people"); }catch(e){ return 0; } })();
+      state.people = saved || health.people || 4;
+      state.peoplePinned = true;
+    }
+    const rooms = await fetch("/api/rooms").then(r=>r.json());
+    const list = (rooms.rooms||[]).filter(r=>r.enabled);
+
+    if (!list.length){
+      say("还没有绑定宿舍。请先在配置里设置，或运行 python cli.py login");
+      return;
+    }
+    state.room = state.room || list[0].room_key;
+    $("#roomName").textContent = list[0].label || "";
+
+    const [summary, series, daily, hourly, weekday, fc, an, hm, quality, dist, cycles,
+           insights, compare] =
+      await Promise.all([
+        get("/api/summary"), get("/api/series"), get("/api/daily"), get("/api/hourly"),
+        get("/api/weekday"), get("/api/forecast"), get("/api/anomalies"), get("/api/heatmap", { days: state.heatDays }),
+        get("/api/quality"), get("/api/distribution"), get("/api/cycles"),
+        get("/api/insights"), get("/api/compare"),
+      ]);
+
+    state.unit = summary.native_unit || "kwh";
+    state.price = summary.unit_price || 0.538;
+    state.quality = quality;
+
+    // ⚠️ 必须先把容器显示出来再画图。
+    //    #app 是 display:none 时宽度为 0，echarts.init 会把所有图挤在左边一坨。
+    //    这里先显示 + 等两帧让布局生效，渲染完再统一 resize 兜底。
+    $("#loading").classList.add("hide");
+    $("#app").classList.remove("hide");
+    await nextFrame();
+    resizeAll();
+
+    renderHero(summary);
+    renderInsights(insights);
+    renderCompare(compare);
+    renderBalance(series, fc);
+    renderDaily(daily.daily || []);
+    renderHourly(hourly);
+    renderCycles(cycles);
+    renderDistribution(dist);
+    renderWeekday(weekday.weekdays || []);
+    renderHeatmap(hm);
+    renderEvents(an);
+    renderAbout(summary, quality);
+    renderPresets();
+    renderCalc();
+    $("#heatSeg").querySelectorAll("button").forEach(x =>
+      x.classList.toggle("on", +x.dataset.d === state.heatDays));
+
+    await nextFrame();
+    resizeAll();
+    // 字体/滚动条等引起的二次布局再兜一次
+    setTimeout(resizeAll, 200);
+  } catch(e){
+    say("读取失败：" + e.message);
+  }
+}
+
+/* ---------------- 交互 ---------------- */
+$("#unitSel").onchange = e => { state.viewUnit = e.target.value; load(); };
+$("#refresh").onclick = () => load();
+$("#calcW").oninput = renderCalc;
+$("#calcH").oninput = renderCalc;
+$("#heatSeg").querySelectorAll("button").forEach(b => {
+  b.onclick = () => {
+    state.heatDays = +b.dataset.d;
+    $("#heatSeg").querySelectorAll("button").forEach(x =>
+      x.classList.toggle("on", +x.dataset.d === state.heatDays));
+    get("/api/heatmap", { days: state.heatDays }).then(renderHeatmap).catch(()=>{});
+  };
+});
+$("#rangeSeg").querySelectorAll("button").forEach(b =>
+  b.onclick = () => setRangeDays(+b.dataset.d));
+$("#fromDate").onchange = e => {
+  state.from = e.target.value || null;
+  if (state.from && state.to && state.from > state.to) state.to = state.from;
+  syncRangeInputs(); markRangeSeg(); load();
+};
+$("#toDate").onchange = e => {
+  state.to = e.target.value || null;
+  if (state.from && state.to && state.to < state.from) state.from = state.to;
+  syncRangeInputs(); markRangeSeg(); load();
+};
+$("#daySel").onchange = async e => {
+  try{
+    const d = await get("/api/hourly", { date: e.target.value });
+    renderHourly(d);
+  }catch(err){}
+};
+window.addEventListener("resize", () => Object.values(state.charts).forEach(c=>c.resize()));
+
+(async () => {
+  state.from = addDays(-29);
+  state.to = iso(new Date());
+  syncRangeInputs();
+  markRangeSeg();
+  try{
+    const st = await fetch("/api/auth/status").then(r=>r.json());
+    if (st.login_required && (!st.logged_in || st.need_relogin || st.need_location)){
+      location.replace("/login"); return;
+    }
+  }catch(e){}
+  load();
+  setInterval(load, 5*60*1000);
+
+  // 手机把标签页切到后台时浏览器会冻结定时器，切回来可能还是旧数据。
+  // 所以在「重新可见 / 窗口获得焦点」时立刻再拉一次。
+  let lastLoad = 0;
+  const refreshIfStale = () => {
+    if (document.visibilityState !== "visible") return;
+    if (Date.now() - lastLoad < 30000) return;     // 30 秒内不重复请求
+    lastLoad = Date.now();
+    load();
+  };
+  document.addEventListener("visibilitychange", refreshIfStale);
+  window.addEventListener("focus", refreshIfStale);
+  window.addEventListener("pageshow", e => { if (e.persisted) refreshIfStale(); });
+})();</script>
+</body>
+</html>

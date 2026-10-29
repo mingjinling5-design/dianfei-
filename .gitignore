@@ -1,0 +1,25 @@
+# 数据库、备份与运行日志（含个人用电数据，绝不提交）
+data/
+logs/
+*.log
+*.err
+
+# 含凭据的配置，绝对不要提交
+config.yaml
+config.local.yaml
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.idea/
+.vscode/
+
+# 服务器上的手工备份
+*.bak-*
+*.bak
+
+# 系统文件
+.DS_Store
+Thumbs.db

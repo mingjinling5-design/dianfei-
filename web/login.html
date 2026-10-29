@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#ffffff" />
+<title>登录 · 寝室电费</title>
+<link rel="manifest" href="/manifest.webmanifest" />
+<link rel="icon" href="/icons/favicon.png" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="寝室电费" />
+<style>
+  :root{
+    --bg:#f5f6f8; --card:#fff; --line:#e8eaed; --line2:#f0f1f3;
+    --fg:#1f2329; --sub:#8a919f; --faint:#b0b6c0;
+    --brand:#2563eb; --brand-soft:#eff4ff;
+    --ok:#10b981; --warn:#f59e0b; --crit:#ef4444;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{
+    margin:0;min-height:100dvh;display:flex;align-items:center;justify-content:center;
+    background:var(--bg);color:var(--fg);padding:20px;
+    font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{width:100%;max-width:400px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:26px 22px}
+  .logo{width:46px;height:46px;border-radius:13px;background:var(--brand-soft);
+        display:flex;align-items:center;justify-content:center;font-size:24px;margin-bottom:14px}
+  h1{margin:0 0 3px;font-size:19px;font-weight:600}
+  .lead{color:var(--sub);font-size:13.5px;margin-bottom:22px}
+  label{display:block;font-size:13px;color:var(--sub);margin:16px 0 7px}
+  input,select{width:100%;background:#fff;color:var(--fg);border:1px solid var(--line);
+        border-radius:10px;padding:12px 13px;font-size:15px;font-family:inherit;outline:none;
+        transition:border-color .15s}
+  input:focus,select:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(37,99,235,.08)}
+  input::placeholder{color:var(--faint)}
+  .row{display:flex;gap:8px}
+  .row input{flex:1}
+  button{background:#fff;color:var(--fg);border:1px solid var(--line);border-radius:10px;
+        padding:12px 16px;font-size:14.5px;font-family:inherit;cursor:pointer;white-space:nowrap;
+        transition:border-color .15s,background .15s}
+  button:hover:not(:disabled){border-color:#cfd4dc}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  button.primary{width:100%;margin-top:22px;background:var(--brand);border-color:var(--brand);
+        color:#fff;font-weight:500;font-size:15.5px;padding:13px}
+  button.primary:hover:not(:disabled){background:#1d4ed8;border-color:#1d4ed8}
+  button.link{background:none;border:0;color:var(--brand);padding:0;font-size:13.5px}
+  .hint{font-size:12.5px;color:var(--sub);margin-top:8px;line-height:1.7}
+  .msg{margin-top:14px;padding:11px 13px;border-radius:10px;font-size:13.5px;display:none;line-height:1.6}
+  .msg.err{display:block;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c}
+  .msg.ok{display:block;background:#ecfdf5;border:1px solid #a7f3d0;color:#047857}
+  .msg.info{display:block;background:var(--brand-soft);border:1px solid #dbeafe;color:#1e40af}
+  .steps{display:flex;gap:6px;margin-bottom:22px}
+  .steps i{flex:1;height:3px;border-radius:2px;background:var(--line);transition:background .25s}
+  .steps i.on{background:var(--brand)}
+  .hide{display:none}
+  pre{background:#f7f8fa;border:1px solid var(--line);border-radius:10px;padding:12px;
+      font-size:12px;color:#4b5563;white-space:pre-wrap;line-height:1.85;margin:10px 0 0;
+      font-family:ui-monospace,Menlo,Consolas,monospace;max-height:240px;overflow:auto}
+  .foot{margin-top:22px;padding-top:18px;border-top:1px solid var(--line2);
+        color:var(--faint);font-size:12px;line-height:1.8}
+  details summary{cursor:pointer;color:var(--sub);font-size:13px;list-style:none;margin-top:16px}
+  details summary::-webkit-details-marker{display:none}
+  details summary::before{content:"▸ "}
+  details[open] summary::before{content:"▾ "}
+  a{color:var(--brand);text-decoration:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <div class="logo">⚡</div>
+    <h1>寝室电费</h1>
+    <div class="lead" id="lead">用手机号和验证码登录，不需要抓包</div>
+
+    <div class="steps"><i id="s1" class="on"></i><i id="s2"></i><i id="s3"></i></div>
+
+    <!-- 第一步 -->
+    <div id="step1">
+      <label>手机号</label>
+      <input id="phone" type="tel" maxlength="11" inputmode="numeric"
+             placeholder="11 位手机号" autocomplete="tel" />
+
+      <label>验证码</label>
+      <div class="row">
+        <input id="code" type="text" maxlength="6" inputmode="numeric" placeholder="6 位验证码" />
+        <button id="sendBtn" disabled>获取验证码</button>
+      </div>
+
+      <label>学校</label>
+      <input id="schoolSearch" placeholder="输入学校名搜索" autocomplete="off" />
+      <select id="schoolSel" style="margin-top:8px">
+        <option value="">请先搜索学校</option>
+      </select>
+      <div class="hint" id="schoolHint">选一次就行，以后不用再选。</div>
+
+      <button class="primary" id="loginBtn">登录</button>
+
+      <details>
+        <summary>收不到短信？</summary>
+        <div class="hint">
+          易校园的短信有时会延迟十几分钟，稍等一下就好。
+          重复点「获取验证码」发的是同一条验证码，不会作废。
+          <div style="margin-top:8px">
+            <button class="link" id="diagLink">检查一下</button>
+          </div>
+          <pre id="diagBox" class="hide"></pre>
+        </div>
+      </details>
+    </div>
+
+    <!-- 第二步：选宿舍 -->
+    <div id="step2" class="hide">
+      <div class="lead" style="margin-bottom:4px">登录成功，再选一次宿舍位置</div>
+      <label>校区</label>
+      <select id="areaSel"><option value="">加载中…</option></select>
+      <label>楼栋</label>
+      <select id="buildingSel" disabled><option value="">请先选校区</option></select>
+      <label>楼层</label>
+      <select id="floorSel" disabled><option value="">请先选楼栋</option></select>
+      <label>房间</label>
+      <select id="roomSel" disabled><option value="">请先选楼层</option></select>
+      <button class="primary" id="bindBtn" disabled>确认</button>
+    </div>
+
+    <!-- 第三步 -->
+    <div id="step3" class="hide">
+      <div class="lead" style="margin-bottom:4px">设置完成，正在进入…</div>
+      <div class="msg info" id="doneInfo"></div>
+      <button class="primary" id="goBtn">进入</button>
+    </div>
+
+    <!-- 重新登录 -->
+    <div id="reloginBox" class="hide">
+      <label>验证码</label>
+      <div class="row">
+        <input id="rCode" type="text" maxlength="6" inputmode="numeric" placeholder="6 位验证码" />
+        <button id="rSendBtn">获取验证码</button>
+      </div>
+      <button class="primary" id="rBtn">登录</button>
+    </div>
+
+    <div class="msg" id="msg"></div>
+
+    <div class="foot">
+      手机号和登录状态只保存在本机，不会上传到别的地方。
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const api = async (path, body) => {
+  const r = await fetch(path, {
+    method: body ? "POST" : "GET",
+    headers: body ? {"Content-Type":"application/json"} : {},
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const j = await r.json().catch(()=>({error:"请求失败"}));
+  if (!r.ok) throw new Error(j.error || ("HTTP " + r.status));
+  return j;
+};
+function say(t, kind="info"){ const m=$("#msg"); m.className="msg "+kind; m.textContent=t; }
+function clearMsg(){ $("#msg").className="msg"; }
+function step(n){
+  ["step1","step2","step3","reloginBox"].forEach(id=>$("#"+id).classList.add("hide"));
+  ["s1","s2","s3"].forEach((id,i)=>$("#"+id).classList.toggle("on", i<n));
+  if(n===1) $("#step1").classList.remove("hide");
+  if(n===2) $("#step2").classList.remove("hide");
+  if(n===3) $("#step3").classList.remove("hide");
+}
+
+let schools=[], picked=null, timer=null;
+
+/* 学校搜索 */
+let st=null;
+$("#schoolSearch").addEventListener("input", e=>{
+  clearTimeout(st);
+  const kw = e.target.value.trim();
+  st = setTimeout(()=>loadSchools(kw), 300);
+});
+async function loadSchools(kw){
+  try{
+    const { schools:list } = await api("/api/auth/schools?q=" + encodeURIComponent(kw||""));
+    schools = list;
+    $("#schoolSel").innerHTML = list.length
+      ? `<option value="">请选择学校（${list.length} 个结果）</option>` +
+        list.map(s=>`<option value="${s.school_code}">${s.school_name}</option>`).join("")
+      : `<option value="">没找到，换个词试试</option>`;
+    $("#schoolHint").textContent = list.length ? "选一次就行，以后不用再选。" : "试试只输入学校名的两三个字。";
+  }catch(e){ $("#schoolHint").textContent = "学校列表加载失败：" + e.message; }
+}
+$("#schoolSel").onchange = e=>{
+  picked = schools.find(s=>String(s.school_code)===e.target.value) || null;
+  $("#schoolHint").textContent = picked ? `已选择：${picked.school_name}` : "请选择学校。";
+  refreshSend();
+};
+
+/* 手机号 */
+const phoneOk = ()=> /^\d{11}$/.test($("#phone").value.trim());
+function refreshSend(){
+  if(timer) return;
+  $("#sendBtn").disabled = !phoneOk();
+}
+$("#phone").addEventListener("input", refreshSend);
+
+function startCountdown(sec){
+  const b = $("#sendBtn");
+  if(timer){ clearInterval(timer); timer=null; }
+  let left = sec;
+  b.disabled = true;
+  b.textContent = left + " 秒后可重发";
+  timer = setInterval(()=>{
+    left -= 1;
+    b.textContent = left>0 ? left+" 秒后可重发" : "重新获取";
+    if(left<=0){ clearInterval(timer); timer=null; b.textContent="获取验证码"; refreshSend(); }
+  },1000);
+}
+
+$("#sendBtn").onclick = async ()=>{
+  clearMsg();
+  const phone = $("#phone").value.trim();
+  if(!phoneOk()) return say("请输入 11 位手机号","err");
+  const b = $("#sendBtn"); b.disabled=true; b.textContent="发送中…";
+  try{
+    const r = await api("/api/auth/send-code", {phone});
+    say(r.message || "验证码已发送，请查看短信","ok");
+    startCountdown(60);
+  }catch(e){
+    say(e.message,"err");
+    b.textContent="获取验证码"; refreshSend();
+  }
+};
+
+$("#loginBtn").onclick = async ()=>{
+  clearMsg();
+  const phone = $("#phone").value.trim();
+  const code = $("#code").value.trim();
+  if(!phoneOk()) return say("请输入 11 位手机号","err");
+  if(code.length < 4) return say("请输入短信验证码","err");
+  if(!picked) return say("请先搜索并选择学校","err");
+
+  const b = $("#loginBtn"); b.disabled=true; b.textContent="登录中…";
+  try{
+    const r = await api("/api/auth/login", {
+      phone, sms_code: code,
+      school_code: picked.school_code, school_name: picked.school_name,
+    });
+    if(r.need_location || !r.is_bound){
+      say("登录成功，请选择宿舍位置","ok");
+      step(2);
+      await loadAreas();
+    }else{
+      step(3);
+      const u = r.user_info || {};
+      $("#doneInfo").textContent = [u.school_name,u.building_name,u.room_name].filter(Boolean).join(" ");
+      setTimeout(()=>location.replace("/"), 800);
+    }
+  }catch(e){
+    say(e.message,"err");
+  }finally{
+    b.disabled=false; b.textContent="登录";
+  }
+};
+
+/* 宿舍级联 */
+function fill(sel, items, ph){
+  const el = $(sel);
+  el.innerHTML = items.length
+    ? `<option value="">${ph}</option>` + items.map(i=>`<option value="${i.value}">${i.label}</option>`).join("")
+    : `<option value="">没有可选项</option>`;
+  el.disabled = !items.length;
+}
+const txt = sel => $(sel).selectedOptions[0] ? $(sel).selectedOptions[0].textContent : "";
+
+async function loadAreas(){
+  try{ fill("#areaSel", (await api("/api/auth/areas")).items, "请选择校区"); }
+  catch(e){ say("加载校区失败："+e.message,"err"); }
+}
+$("#areaSel").onchange = async e=>{
+  if(!e.target.value) return;
+  try{
+    fill("#buildingSel", (await api("/api/auth/buildings?area_id="+encodeURIComponent(e.target.value))).items, "请选择楼栋");
+  }catch(err){ say("加载楼栋失败："+err.message,"err"); }
+  ["#floorSel","#roomSel"].forEach(s=>{ $(s).innerHTML='<option value="">请先选上级</option>'; $(s).disabled=true; });
+  $("#bindBtn").disabled = true;
+};
+$("#buildingSel").onchange = async e=>{
+  if(!e.target.value) return;
+  try{
+    fill("#floorSel", (await api("/api/auth/floors?area_id="+encodeURIComponent($("#areaSel").value)+
+      "&building_code="+encodeURIComponent(e.target.value))).items, "请选择楼层");
+  }catch(err){ say("加载楼层失败："+err.message,"err"); }
+  $("#roomSel").innerHTML='<option value="">请先选上级</option>'; $("#roomSel").disabled=true;
+  $("#bindBtn").disabled = true;
+};
+$("#floorSel").onchange = async e=>{
+  if(!e.target.value) return;
+  try{
+    fill("#roomSel", (await api("/api/auth/rooms?area_id="+encodeURIComponent($("#areaSel").value)+
+      "&building_code="+encodeURIComponent($("#buildingSel").value)+
+      "&floor_code="+encodeURIComponent(e.target.value))).items, "请选择房间");
+  }catch(err){ say("加载房间失败："+err.message,"err"); }
+  $("#bindBtn").disabled = true;
+};
+$("#roomSel").onchange = ()=>{ $("#bindBtn").disabled = !$("#roomSel").value; };
+
+$("#bindBtn").onclick = async ()=>{
+  clearMsg();
+  const b = $("#bindBtn"); b.disabled=true; b.textContent="提交中…";
+  try{
+    await api("/api/auth/location", {
+      area_id: $("#areaSel").value, area_name: txt("#areaSel"),
+      building_code: $("#buildingSel").value, building_name: txt("#buildingSel"),
+      floor_code: $("#floorSel").value, floor_name: txt("#floorSel"),
+      room_code: $("#roomSel").value, room_name: txt("#roomSel"),
+    });
+    say("设置完成","ok");
+    step(3);
+    $("#doneInfo").textContent = txt("#buildingSel") + " " + txt("#roomSel");
+    setTimeout(()=>location.replace("/"), 800);
+  }catch(e){
+    say(e.message,"err");
+    b.disabled=false; b.textContent="确认";
+  }
+};
+
+/* 重新登录 */
+$("#rSendBtn").onclick = async ()=>{
+  clearMsg();
+  const b=$("#rSendBtn"); b.disabled=true; b.textContent="发送中…";
+  try{
+    const r = await api("/api/auth/relogin-send-code", {});
+    say(r.message || "验证码已发送","ok");
+  }catch(e){ say(e.message,"err"); }
+  finally{ b.disabled=false; b.textContent="获取验证码"; }
+};
+$("#rBtn").onclick = async ()=>{
+  clearMsg();
+  const code = $("#rCode").value.trim();
+  if(code.length<4) return say("请输入验证码","err");
+  const b=$("#rBtn"); b.disabled=true; b.textContent="登录中…";
+  try{
+    await api("/api/auth/relogin", {sms_code: code});
+    say("已恢复登录","ok");
+    setTimeout(()=>location.replace("/"), 700);
+  }catch(e){ say(e.message,"err"); b.disabled=false; b.textContent="登录"; }
+};
+
+/* 自检 */
+$("#diagLink").onclick = async ()=>{
+  const box = $("#diagBox");
+  box.classList.remove("hide");
+  box.textContent = "检查中…";
+  try{
+    const d = await api("/api/auth/diagnose?phone=" + encodeURIComponent($("#phone").value.trim()));
+    box.textContent = d.steps.map(s => (s.ok?"✓ ":"✗ ") + s.step + "：" + s.detail).join("\n");
+  }catch(e){ box.textContent = "检查失败：" + e.message; }
+};
+
+/* 启动 */
+(async ()=>{
+  try{
+    const s = await api("/api/auth/status");
+    if(s.source_type !== "nofish"){ location.replace("/"); return; }
+    if(s.logged_in && !s.need_relogin && !s.need_location){ location.replace("/"); return; }
+
+    if(s.logged_in && s.need_relogin){
+      $("#lead").textContent = `登录已过期（${s.phone}），重新验证一次`;
+      step(0);
+      $("#reloginBox").classList.remove("hide");
+      return;
+    }
+    if(s.logged_in && s.need_location){
+      $("#lead").textContent = "还需要选一次宿舍位置";
+      step(2);
+      await loadAreas();
+      return;
+    }
+    step(1);
+    if(s.pending_phone && /^\d{11}$/.test(s.pending_phone)){
+      $("#phone").value = s.pending_phone;
+      say("验证码之前已经发过了，直接填收到的验证码就行","info");
+    }
+    refreshSend();
+    await loadSchools("");
+  }catch(e){
+    say("加载失败："+e.message,"err");
+    step(1);
+  }
+})();
+</script>
+</body>
+</html>
